@@ -34,6 +34,8 @@ const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wik
 const double kBohrRadiusProton = kBohrRadius / 10;  // swag / trial and error
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
+const int    kMaxParticles = 1024;
+
 // Slow the simulation when there are huge forces that create huge errors.
 const double kShortDt = .001 / kPFrequency;  // Seconds
 // Use a long dt to make the simulation faster.
@@ -89,7 +91,7 @@ public:
   TeeLogger logger;
   std::ostream& tee;
   std::ofstream& log_file = logger.get_file_stream();
-  // Infinite force when particles are superimposed on each other.
+  // Infinite force1 when particles are superimposed on each other.
   // To combat limitations of simulation, teleport the electron to other side of proton.
   double v_when_teleported = 0;
   double prev_vel_mag = 0;
@@ -99,8 +101,10 @@ public:
   static const int max_prev_log_lines = 4;
   std::vector<std::string> prev_log_lines = std::vector<std::string>(max_prev_log_lines);
   int prev_log_line_index = 0;
-  double m_bg_f[3];         // Magnetic force from background magnetic field.
+  double m_bg_f[3];         // Magnetic force1 from background magnetic field.
   double mf_q2[3];          // Force from q2.
+  double force1[kMaxParticles][3];  // Force from each particle for one iteration.
+  double forces[kMaxParticles][3];  // Forces from each particle over multiple iterations.
 
   explicit Particle(double mass_mev, double mass_kg, double avg_q, double q_amplitude,
                     double max_speed_allowed, double max_dist_allowed,
@@ -138,34 +142,6 @@ public:
     }
   }
 
-
-  // Is there a formula equivalent to below?
-  static double dummiesInverseExponential(double fast_fraction) {
-    double slow_fraction = 1 - fast_fraction;
-    // from 0 to 90% return 0 to 90%
-    // from 90% to 95% return 90% to 99%
-    // from 95% to 97% return 99% to 99.9%
-    // from 97% to 99% return 99.9% to 99.99%
-    // from 99% to 100% return 99.99% to 99.999%
-
-    if (slow_fraction < 0.90) {
-      return slow_fraction;
-    }
-    if (slow_fraction < 0.95) {
-      return 0.9 + (slow_fraction - 0.90) * (0.09 / 0.05);
-    }
-    if (slow_fraction < 0.97) {
-      return 0.99 + (slow_fraction - 0.95) * (0.009 / 0.02);
-    }
-    if (slow_fraction < 0.99) {
-      return 0.999 + (slow_fraction - 0.97) * (0.0009 / 0.02);
-    }
-    if (slow_fraction < 0.999) {
-      return 0.9999 + (slow_fraction - 0.99) * (0.00009 / 0.009);
-    }
-    return 1;
-    assert(false);
-  }
 
   static bool NotTrivialParameter(const double *d3, int i) {
     // If within 1E4 of zero index.
@@ -271,6 +247,34 @@ public:
     prev_vel_mag = v_mag;
   }
 
+  // Is there a formula equivalent to below?
+  static double dummiesInverseExponential(double fast_fraction) {
+    double slow_fraction = 1 - fast_fraction;
+    // from 0 to 90% return 0 to 90%
+    // from 90% to 95% return 90% to 99%
+    // from 95% to 97% return 99% to 99.9%
+    // from 97% to 99% return 99.9% to 99.99%
+    // from 99% to 100% return 99.99% to 99.999%
+
+    if (slow_fraction < 0.90) {
+      return slow_fraction;
+    }
+    if (slow_fraction < 0.95) {
+      return 0.9 + (slow_fraction - 0.90) * (0.09 / 0.05);
+    }
+    if (slow_fraction < 0.97) {
+      return 0.99 + (slow_fraction - 0.95) * (0.009 / 0.02);
+    }
+    if (slow_fraction < 0.99) {
+      return 0.999 + (slow_fraction - 0.97) * (0.0009 / 0.02);
+    }
+    if (slow_fraction < 0.999) {
+      return 0.9999 + (slow_fraction - 0.99) * (0.00009 / 0.009);
+    }
+    return 1;
+    assert(false);
+  }
+
   static double CalculateNewDt(double dist_mag, double * fast_fraction_ptr) {
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
@@ -360,7 +364,7 @@ public:
     return c;
   }
 
-  // Calculate the magnetic force caused by:
+  // Calculate the magnetic force1 caused by:
   // 1. particle(s) moving
   // 2. Intrinsic magnetic field of the particles.
   //    Not implemented yet.
@@ -376,7 +380,7 @@ public:
   void
   CalculateMagneticForce(double *force, Particle *oth, double q1, double q2,
                          double *dist_vector, double dist_mag) {
-    // Constants for calculating magnetic force.
+    // Constants for calculating magnetic force1.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
     const double kPermeability  = 4 * M_PI * 1e-7;  // T * m / A
@@ -400,20 +404,20 @@ public:
     double v1_cross_field_by_q2[3];
     cross(vel, field_by_q2, v1_cross_field_by_q2);
     for (int i = 0; i < 3; ++i) {
-      // Lorentz force from q2 magnetic field = q * v x B
+      // Lorentz force1 from q2 magnetic field = q * v x B
       mf_q2[i] = q1 * v1_cross_field_by_q2[i];
       force[i] = m_bg_f[i] + mf_q2[i];
     }
     /*
     tee << " magnetic field q2 "
               << field_by_q2[0] << ' ' << field_by_q2[1] << ' ' << field_by_q2[2];
-    tee << " magnetic force from q2 " << mf_q2[0] << ' ' << mf_q2[1] << ' ' << mf_q2[2];
+    tee << " magnetic force1 from q2 " << mf_q2[0] << ' ' << mf_q2[1] << ' ' << mf_q2[2];
     tee << "\t background f " << m_bg_f[0] << ' ' << m_bg_f[1] << ' ' << m_bg_f[2] << std::endl;
     */
   }
 
 
-  // Calculate the force between two particles and update position and velocity.
+  // Calculate the force1 between two particles and update position and velocity.
   void SetPosition(Particle* oth /* other particle */) {
     double distance_mag_from_origin = sqrt(pow(pos[0], 2) + pow(pos[1], 2) + pow(pos[2], 2));
     // If particle escapes, then zero out the velocity.
@@ -436,10 +440,10 @@ public:
     double freq_q = GetFreqCharge();
     double oth_charge = oth->GetFreqCharge();
     double force[3];
-    // When opposite charges, force is negative.  When same charges, force is positive.
+    // When opposite charges, force1 is negative.  When same charges, force1 is positive.
     double eforce_magnitude = kCoulomb * freq_q * oth_charge / distance_mag2;
     double acceleration[3];
-    double magnet_f[3];     // Magnetic force.
+    double magnet_f[3];     // Magnetic force1.
     CalculateMagneticForce(magnet_f, oth, freq_q, oth_charge,
                            dist, dist_mag);
     for (int i = 0; i < 3; ++i) {
@@ -471,12 +475,12 @@ public:
                                (vel[max_v_component] < 0 && force[max_v_component] < 0);
     if (is_force_too_high &&
         is_speed_too_high &&
-        // If the force is opposite the direction of the velocity, then don't worry about it.
+        // If the force1 is opposite the direction of the velocity, then don't worry about it.
         force_same_dir_as_v) {
       oth->log_prev_log_lines(1);
       log_prev_log_lines();
       tee << "\t\t " << (is_electron ? "electron" : "proton") << id
-        << " force " << force[0] << " " << force[1] << " " << force[2] << std::endl;
+        << " force1 " << force[0] << " " << force[1] << " " << force[2] << std::endl;
       tee << "\t Force too high.  Dist " << dist_mag << "  Teleporting to other side of "
         << (oth->is_electron ? "electron" : "proton")
         << ".  pos " << pos[0] << " " << pos[1] << " " << pos[2]
@@ -499,6 +503,61 @@ public:
     LogNewPosition(fast_fraction, freq_q, oth_charge, oth, v_mag, v_mag2,
                    dist, dist_mag, force, magnet_f, acceleration, is_force_too_high);
   }
+
+  /* Return value are the forces added to forces_ptr
+  */
+  Particle* CalcForcesFromParticle(Particle *oth /* other particle */, double* forces_ptr) {
+    double distance_mag_from_origin = sqrt(pow(pos[0], 2) + pow(pos[1], 2) + pow(pos[2], 2));
+    // If particle escapes, then zero out the velocity.
+    // This is a hack to limit the problem of energy gain.
+    // https://en.wikipedia.org/wiki/Energy_drift
+    if (distance_mag_from_origin > max_dist_allow) {
+      HandleEscape(distance_mag_from_origin);
+    }
+    double dist[3];
+    for (int i = 0; i < 3; ++i) {
+      dist[i] = pos[i] - oth->pos[i];
+    }
+    double distance_mag2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
+    double dist_mag = sqrt(distance_mag2);
+    double dist_unit_vector[3];
+    for (int i = 0; i < 3; ++i) {
+      dist_unit_vector[i] = dist[i] / dist_mag;
+    }
+    // Current charge varies based on frequency and time.
+    double freq_q = GetFreqCharge();
+    double oth_charge = oth->GetFreqCharge();
+    double force[3];
+    // When opposite charges, force1 is negative.  When same charges, force1 is positive.
+    double eforce_magnitude = kCoulomb * freq_q * oth_charge / distance_mag2;
+    double acceleration[3];
+    double magnet_f[3];     // Magnetic force1.
+    CalculateMagneticForce(magnet_f, oth, freq_q, oth_charge,
+                           dist, dist_mag);
+    for (int i = 0; i < 3; ++i) {
+      force[i] = (eforce_magnitude * dist_unit_vector[i]) + magnet_f[i];
+      forces_ptr[i] += force[i];
+      force1[oth->id][i] += force[i];
+      forces[oth->id][i] += force[i];
+    }
+    return this;  // Not used.
+  }
+
+  void ClearLoggingForOneIteration() {
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        force1[i][j] = 0;
+      }
+    }
+  }
+
+  void ClearLoggingForMultipleIterations() {
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) {
+        forces[i][j] = 0;
+      }
+    }
+  }
 };
 
 
@@ -520,7 +579,6 @@ public:
 class Particles {
 public:
 
-  const static int kMaxParticles = 1024;
   Particle * pars[kMaxParticles];  // par[ticle]s
   int num_particles = 0;
 
@@ -574,15 +632,15 @@ public:
     // tee << "  pos: " << pos << std::endl;
   }
 
-  class Particle {
-  public:
-    // Existing code...
-
-    void CalcForcesFromParticle(int particleIndex) {
-      // Implementation of the CalcForcesFromParticle function.
-      // Add your code here.
+  void CalcForcesOnParticle(int part_num, double * forces_ptr) {
+    Particle * part_ptr = pars[part_num];
+    part_ptr->ClearLoggingForOneIteration();
+    for (int i = 0; i < num_particles; ++i) {
+      if (i == part_num) continue;
+      part_ptr->CalcForcesFromParticle(pars[i], forces_ptr);
     }
-  };
+
+  }
 
   void moveParticles2() {
     const double min_pos_change_desired = 1e-14;
@@ -594,6 +652,9 @@ public:
     double forces[num_particles][3];
     int particle_with_most_forces = 0;
     int part_with_most_movement = 0;
+    for (int i = 0; i < num_particles; ++i) {
+      pars[i]->ClearLoggingForMultipleIterations();
+    }
     for (auto i = 0; i < kMaxTimesToGetSignificantMovement; ++i) {
       for (int j = 0; j < num_particles; ++j) {
         CalcForcesOnParticle(j, forces[j]);
