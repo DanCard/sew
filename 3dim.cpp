@@ -35,6 +35,7 @@ struct SphereInstanceData {
     Color4 color;
 };
 
+// Contains logic to display the simulation.
 class ThreeDim: public Platform::Application {
     public:
     __attribute__((unused)) explicit

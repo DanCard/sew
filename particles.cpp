@@ -51,8 +51,8 @@ const double kCloseToTrouble = 5e-14;
 
 // Global variables
 double time_ = 0;
-double dt = kLongDt;
-int count = 0;  // Invocation count of SetPosition()
+double dt = kShortDt;  // Seconds
+int count = 0;         // Invocation count of SetPosition()
 
 class Particle {
 public:
@@ -331,9 +331,11 @@ public:
   double GetFreqCharge() const {  // Get the charge that is based on freq and thus time.
     // if dt > 0.1 / frequency, then charge is constant.
     // Can't simulate sinusoidal charge when dt is large.
+    /*
     if (dt > (0.1/frequency)) {
       return avg_q;
     }
+    */
     /*
     if (!is_electron) {
       return avg_q;
@@ -560,6 +562,7 @@ public:
       }
       // tee << " change " << pos_change << std::endl;
       time_ += dt;
+      dt = pars[0]->new_dt;
       for (int j = 0; j < num_particles; ++j) {
         if (pos_change[j] > min_pos_change_desired) {
           goto exit_loop;
@@ -568,7 +571,39 @@ public:
     }
     exit_loop:
     // if (pos_change < min_pos_change_desired) tee << std::endl;
-    dt = pars[0]->new_dt;
+    // tee << "  pos: " << pos << std::endl;
+  }
+
+  void moveParticles2() {
+    const double min_pos_change_desired = 1e-14;
+    const int kMaxTimesToGetSignificantMovement = 1024;
+    double pos_change[kMaxParticles];
+    for (int j = 0; j < num_particles; ++j) {
+      pos_change[j] = 0;
+    }
+    for (auto i = 0; i < kMaxTimesToGetSignificantMovement; ++i) {
+      for (int j = 0; j < num_particles; ++j) {
+        CalcForcesOnParticle(j);
+        ApplyForcesToParticle(j);
+        pos_change[j] += std::abs(pars[j]->pos_change_magnitude);
+      }
+      // tee << " change " << pos_change << std::endl;
+      time_ += dt;
+      // Find the shortest dt and set the new dt to that.
+      dt = pars[0]->new_dt;
+      for (int j = 1; j < num_particles; ++j) {
+        if (pars[j]->new_dt < dt) {
+          dt = pars[j]->new_dt;
+        }
+      }
+      for (int j = 0; j < num_particles; ++j) {
+        if (pos_change[j] > min_pos_change_desired) {
+          goto exit_loop;
+        }
+      }
+    }
+    exit_loop:
+    // if (pos_change < min_pos_change_desired) tee << std::endl;
     // tee << "  pos: " << pos << std::endl;
   }
 
