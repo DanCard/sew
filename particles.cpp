@@ -574,6 +574,16 @@ public:
     // tee << "  pos: " << pos << std::endl;
   }
 
+  class Particle {
+  public:
+    // Existing code...
+
+    void CalcForcesFromParticle(int particleIndex) {
+      // Implementation of the CalcForcesFromParticle function.
+      // Add your code here.
+    }
+  };
+
   void moveParticles2() {
     const double min_pos_change_desired = 1e-14;
     const int kMaxTimesToGetSignificantMovement = 1024;
@@ -581,10 +591,13 @@ public:
     for (int j = 0; j < num_particles; ++j) {
       pos_change[j] = 0;
     }
+    double forces[num_particles][3];
+    int particle_with_most_forces = 0;
+    int part_with_most_movement = 0;
     for (auto i = 0; i < kMaxTimesToGetSignificantMovement; ++i) {
       for (int j = 0; j < num_particles; ++j) {
-        // CalcForcesOnParticle(j);
-        // ApplyForcesToParticle(j);
+        CalcForcesOnParticle(j, forces[j]);
+        ApplyForcesToParticle(j, forces[j]);
         pos_change[j] += std::abs(pars[j]->pos_change_magnitude);
       }
       // tee << " change " << pos_change << std::endl;
@@ -594,15 +607,19 @@ public:
       for (int j = 1; j < num_particles; ++j) {
         if (pars[j]->new_dt < dt) {
           dt = pars[j]->new_dt;
+          particle_with_most_forces = j;
         }
       }
       for (int j = 0; j < num_particles; ++j) {
         if (pos_change[j] > min_pos_change_desired) {
+          part_with_most_movement = j;
           goto exit_loop;
         }
       }
     }
     exit_loop:
+    PossiblyLogChanges(forces, pos_change, part_with_most_movement,
+                       part_with_most_movement);
     // if (pos_change < min_pos_change_desired) tee << std::endl;
     // tee << "  pos: " << pos << std::endl;
   }
