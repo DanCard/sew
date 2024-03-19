@@ -583,8 +583,8 @@ public:
     }
     for (auto i = 0; i < kMaxTimesToGetSignificantMovement; ++i) {
       for (int j = 0; j < num_particles; ++j) {
-        CalcForcesOnParticle(j);
-        ApplyForcesToParticle(j);
+        // CalcForcesOnParticle(j);
+        // ApplyForcesToParticle(j);
         pos_change[j] += std::abs(pars[j]->pos_change_magnitude);
       }
       // tee << " change " << pos_change << std::endl;
