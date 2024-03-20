@@ -316,7 +316,7 @@ public:
   }
 
   // When forces are very high we should slow down delta time (dt)
-  double CalculateNewDt(double * fast_fraction_ptr) {
+  double CalcNewDt(double * fast_fraction_ptr) {
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
     // fast_fraction < 0 when distance shorter than kCloseToTrouble.
@@ -528,7 +528,7 @@ public:
     }
 
     double fast_fraction;
-    new_dt = CalculateNewDt(&fast_fraction);
+    new_dt = CalcNewDt(&fast_fraction);
 
     LogStuff();
   }
@@ -607,7 +607,7 @@ public:
     vel_mag2 = pow(vel[0], 2) + pow(vel[1], 2) + pow(vel[2], 2);
     vel_mag  = sqrt(vel_mag2);
     double fast_fraction;
-    new_dt = CalculateNewDt(&fast_fraction);
+    new_dt = CalcNewDt(&fast_fraction);
   }
 };
 
@@ -717,11 +717,14 @@ public:
       time_ += dt;
       // Find the shortest dt and set the new dt to that.
       dt = pars[0]->new_dt;
+      int shortest_dt = 0;
       for (int j = 1; j < num_particles; ++j) {
         if (pars[j]->new_dt < dt) {
           dt = pars[j]->new_dt;
+          shortest_dt = j;
         }
       }
+      std::cout << "\t shortest_dt " << shortest_dt << std::endl;
       for (int j = 0; j < num_particles; ++j) {
         if (pos_change[j] > min_pos_change_desired) {
           part_with_most_movement = j;
