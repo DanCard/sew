@@ -151,7 +151,9 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
                   << std::endl;
       _spherePositions[1] = Vector3{0.0f};
       _sphereInstanceData[0].color = Color4{1.0F, 0.0f, 0.0f, 0.5f};
-      _sphereInstanceData[1].color = Color4{0.0f, 0.0f, 1.0f, 0.5f};
+      _sphereInstanceData[1].color = Color4{0.9f, 0.1f, 0.0f, 0.5f};
+      _sphereInstanceData[2].color = Color4{0.0f, 0.0f, 1.0f, 0.5f};
+      _sphereInstanceData[3].color = Color4{0.0f, 0.1f, 0.9f, 0.5f};
       /*
   } else {
       // Setup points (render as spheres)
