@@ -31,7 +31,7 @@ const double kBohrRadius = 5.29177210903e-11;  // Meters
                                                // https://en.wikipedia.org/wiki/Bohr_magneton
 const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg);
 const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
-const double kBohrRadiusProton = kBohrRadius / 20;  // value = swag / trial and error
+const double kBohrRadiusProton = kBohrRadius / 10;  // value = swag / trial and error
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 4;
@@ -40,6 +40,8 @@ const int    kMaxParticles = 4;
 const double kShortDt = .1 / kPFrequency;  // Seconds
 // Use a long dt to make the simulation faster.
 const double kLongDt  = .1 / kEFrequency;  // Seconds
+// Delta time in seconds.
+double dt = kLongDt - kShortDt / 2;
 // We change the simulation style when particle gets near the speed of light.
 // Instead of using dt, we just simulate the trajectory of the particle.
 // Needed because simulation creates huge errors when there are huge forces.
@@ -54,8 +56,6 @@ const double kForceTooHigh = 0.3;  // From trial and error.
 
 // Global variables
 double time_ = 0;
-  // Delta time in seconds.
-double dt = kLongDt - kShortDt / 2;
 int count = 0;         // Invocation count of moving particles.
 
 class Particle {
@@ -91,7 +91,6 @@ public:
   double pos[3] = {0, 0, 0};  // Position
 
   double distance_mag_from_origin = 0;
-  double distance[kMaxParticles][3];
 
   double forces[3];           // Sum of all forces from all particles.
   double vel[3] = {0, 0, 0};
@@ -173,7 +172,8 @@ public:
   }
 
 
-  static bool NotTrivialParameter(const double *d3, int i) {
+  static bool IsSignificantParameter(const double *d3, int i) {
+    if (std::abs(d3[i]) < 1e-20) return false;
     if (i == 0) return d3[0] != 0;
     if (d3[0] == 0) return d3[i] != 0;
     // If within 1E4 of zero index.
@@ -188,12 +188,15 @@ public:
     int precision = width - 7;
     if (width < 8) precision = 0;
     log_line << "  " << name << std::scientific << std::setprecision(precision);
-    if (NotTrivialParameter(d3, 0)) log_line << " x " << std::setw(width) << d3[0];
-    if (NotTrivialParameter(d3, 1)) log_line << " y " << std::setw(width) << d3[1];
-    if (NotTrivialParameter(d3, 2)) log_line << " z " << std::setw(width) << d3[2];
-    if (d3[0] == 0 && d3[1] == 0 && d3[2] == 0) {
-      log_line << " 0 " << std::setw(width) << " ";
-    }
+    if (IsSignificantParameter(d3, 0)) log_line << " x " << std::setw(width) << d3[0];
+    else                               log_line << "   " << std::setw(width) << " ";
+    if (IsSignificantParameter(d3, 1)) log_line << " y " << std::setw(width) << d3[1];
+    else                               log_line << "   " << std::setw(width) << " ";
+    if (IsSignificantParameter(d3, 2)) log_line << " z " << std::setw(width) << d3[2];
+    /*
+    else if (d3[0] == 0 && d3[1] == 0 && d3[2] == 0)
+                                       log_line << " 0 " << std::setw(width) << " ";
+    */
     return log_line.str();
   }
 
@@ -218,23 +221,23 @@ public:
       << " largest f from: " << (p_exerting_largest_force->is_electron ? "e" : "p")
                              << p_exerting_largest_force_id
       << " f " << largest_force_mag
-      << Log3dArray(forces  , "fs"  ) << std::setprecision(1)
-   // << " d mag" << std::setw(9) << dist_mag_from_largest << std::setprecision(1)
+      << Log3dArray(forces  , " fs") << std::setprecision(1)
+      << " d mag" << std::setw(9) << dist_mag_from_largest << std::setprecision(1)
    // << Log3dArray(dist    , "dis")
    // << Log3dArray(magnet_f, "B"  )
    // << Log3dArray(m_bg_f, "Bg"   )
    // << Log3dArray(mf_q2, "Bq2"   ) << std::setprecision(1)
-      << "  a "    << std::setw( 8) << acceleration[0]
+      << Log3dArray(acceleration, "a")
       << " v mag " << vel_mag
-      << Log3dArray(vel     , "v", 8)
+      << Log3dArray(vel     , "v"  )
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change
-      << Log3dArray(pos_chng, "chng") << std::setprecision(1) << std::fixed
+      << Log3dArray(pos_chng, "chng") << std::setprecision(1)
       /*
       << " pe"    << std::setw(10) << potential_energy
       << " ke"    << std::setw(10) << kinetic_energy
       << " te"    << std::setw(10) << total_energy << std::fixed << std::setprecision(1)
       */
-   // << " dt"    << std::setw( 9) << /* dt << */ " new " << new_dt
+      << " dt"    << std::setw( 9) << dt << " new " << new_dt << std::fixed
       << " fast"  << std::setw( 5) << round(fast_fraction * 10) * 10 << '%'
       << " chrg"  << std::setw( 4) << int(round((freq_charge/avg_q)*100)) << '%'
    // << " oth"   << std::setw( 4) << int(round((other_charge / oth->q_amplitude) * 100)) << '%'
@@ -250,7 +253,7 @@ public:
              ||      (total_energy * prev_energy) <= 0  // If energy flips sign then log.
              );
              */
-    const int ll = 2;  // Limit logging to once every x lines.
+    const int ll = 4096;  // Limit logging to once every x lines.
     if (log_count > 0 // || true
       ||  count%(ll*16) == 0
       || (count%(ll* 8) == 0 && fast_fraction  > 0.01)
@@ -276,6 +279,13 @@ public:
         }
       }
       log_line_str = log_line_str + log_source;
+      // Half the time just log to the file, other half log to both.
+      // What can I use to know if this is half the time?  What can I use in count to decide that?
+      // Or should I just have a toggle button?
+      static bool just_log_to_file = false;
+      if (just_log_to_file) {
+        
+      }
       tee << log_line_str << std::endl;
       prev_energy = total_energy;
       prev_fast_fraction = fast_fraction;
@@ -312,7 +322,6 @@ public:
       return 0.9999 + (slow_fraction - 0.99) * (0.00009 / 0.009);
     }
     return 1;
-    assert(false);
   }
 
   // When forces are very high we should slow down delta time (dt)
@@ -340,9 +349,9 @@ public:
 
   void HandleEscape() {
     log_prev_log_lines();
-    tee << "\tEscaped past "
-      << (is_electron ? " bohr radius of " : " proton allowed radius of ") << max_dist_allow
-      << "  Distance magnitude: " << distance_mag_from_origin
+    tee << "\t" << (is_electron ? "electron" : "proton")
+        << "escaped past radius of " << max_dist_allow
+      << "  Dist mag from origin : " << distance_mag_from_origin
       << "  V when previously teleported: " << v_when_teleported
       << "  Current velocity " << vel[0] << " " << vel[1] << " " << vel[2]
       ;
@@ -366,11 +375,9 @@ public:
   double GetSinusoidalChargeValue() const {
     // if dt > 0.1 / frequency, then charge is constant.
     // Can't simulate sinusoidal charge when dt is large.
-    /*
-    if (dt > (0.1/frequency)) {
+    if (dt > (0.2/frequency)) {
       return avg_q;
     }
-    */
     /*
     if (!is_electron) {
       return avg_q;
@@ -450,7 +457,7 @@ public:
 
 
   // Calculate the force1 between two particles and update position and velocity.
-  void SetPosition(Particle* oth /* other particle */) {
+  void SetPositionOld(Particle* oth /* other particle */) {
     distance_mag_from_origin = sqrt(pow(pos[0], 2) + pow(pos[1], 2) + pow(pos[2], 2));
     // If particle escapes, then zero out the velocity.
     // This is a hack to limit the problem of energy gain.
@@ -545,7 +552,6 @@ public:
     double dist[3];
     for (int i = 0; i < 3; ++i) {
       dist[i] = pos[i] - oth->pos[i];
-      distance[oth_id][i] = dist[i];
     }
     double dist_mag2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
     double dist_mag  = sqrt(dist_mag2);
@@ -574,6 +580,7 @@ public:
       p_exerting_largest_force_id = oth_id;
       largest_force_mag = force_magnitude;
       is_force_too_high = std::abs(force_magnitude) > kForceTooHigh;
+      dist_mag_from_largest = dist_mag;
     }
   }
 
@@ -599,14 +606,13 @@ public:
     }
   }
 
-  void ApplyForcesToParticle(double * forces_ptr) {
+  void ApplyForcesToParticle() {
     for (int i = 0; i < 3; ++i) {
-      acceleration[i] = forces_ptr[i] / this->mass_kg;
+      acceleration[i] = forces[i] / this->mass_kg;
       this->vel[i] += acceleration[i] * dt;
     }
     vel_mag2 = pow(vel[0], 2) + pow(vel[1], 2) + pow(vel[2], 2);
     vel_mag  = sqrt(vel_mag2);
-    double fast_fraction;
     new_dt = CalcNewDt(&fast_fraction);
   }
 };
@@ -683,7 +689,7 @@ public:
     count++;
   }
 
-  void CalcForcesOnParticle(Particle * part_ptr, double * forces_ptr) {
+  void CalcForcesOnParticle(Particle * part_ptr) {
     int part_num = part_ptr->id;
     part_ptr->InitVarsToCalcForces();
     for (int i = 0; i < num_particles; ++i) {
@@ -696,38 +702,32 @@ public:
     const double min_pos_change_desired = 1e-14;
     const int kMaxTimesToGetSignificantMovement = 1024;
     double pos_change[kMaxParticles];
-    std::cout << "\t\t\t\t time: " << time_ << std::endl;
     for (int j = 0; j < num_particles; ++j) {
       pos_change[j] = 0;
     }
-    double forces[num_particles][3];
-    int part_with_most_movement = 0;
     for (int i = 0; i < num_particles; ++i) {
       pars[i]->ClearLoggingForMultipleIterations();
     }
     for (int i = 0; i < kMaxTimesToGetSignificantMovement; ++i) {
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
-        CalcForcesOnParticle(part_ptr, forces[j]);
-        part_ptr->ApplyForcesToParticle(forces[j]);
+        CalcForcesOnParticle(part_ptr);
+        part_ptr->ApplyForcesToParticle();
         pos_change[j] += std::abs(pars[j]->pos_change_magnitude);
       }
-      LogParticles();
       // tee << " change " << pos_change << std::endl;
-      time_ += dt;
       // Find the shortest dt and set the new dt to that.
       dt = pars[0]->new_dt;
-      int shortest_dt = 0;
       for (int j = 1; j < num_particles; ++j) {
         if (pars[j]->new_dt < dt) {
           dt = pars[j]->new_dt;
-          shortest_dt = j;
         }
       }
-      std::cout << "\t shortest_dt " << shortest_dt << std::endl;
+      // std::cout << "\t dt " << std::scientific << dt << std::endl;
+      LogParticles();
+      time_ += dt;
       for (int j = 0; j < num_particles; ++j) {
         if (pos_change[j] > min_pos_change_desired) {
-          part_with_most_movement = j;
           goto exit_loop;
         }
       }
