@@ -97,7 +97,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       const Vector2 dpiScaling = this->dpiScaling({});
       Configuration conf;
       conf.setTitle("Magnum Octree Example")
-          .setSize({1024+512, 1024}, dpiScaling)
+          .setSize({1024+256, 1024+256}, dpiScaling)
           .setWindowFlags(Configuration::WindowFlag::Resizable);
       Debug{} << "size:" << conf.size() << "dpiScaling:" << dpiScaling << "max:" << dpiScaling.max();
       GLConfiguration glConf;
@@ -140,34 +140,19 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   _spherePositions = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereVelocities = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereInstanceData = Containers::Array<SphereInstanceData>{NoInit, numSpheres};
-  // if (useStandingEMWave) {
-      atom = Particles(numSpheres);
-      _spherePositions[0] = Vector3{
-          static_cast<float>(atom.pars[0]->pos[0] / kScale),
-          static_cast<float>(atom.pars[0]->pos[1] / kScale),
-          static_cast<float>(atom.pars[0]->pos[2] / kScale)};
-      std::cout << "\t sphere pos: " << _spherePositions[0][0]
-                  << " electron pos: " << atom.pars[0]->pos[0]
-                  << std::endl;
-      _spherePositions[1] = Vector3{0.0f};
-      _sphereInstanceData[0].color = Color4{1.0F, 0.0f, 0.0f, 0.5f};
-      _sphereInstanceData[1].color = Color4{0.9f, 0.1f, 0.0f, 0.5f};
-      _sphereInstanceData[2].color = Color4{0.0f, 0.0f, 1.0f, 0.5f};
-      _sphereInstanceData[3].color = Color4{0.0f, 0.1f, 0.9f, 0.5f};
-      /*
-  } else {
-      // Setup points (render as spheres)
-
-      for(std::size_t i = 0; i < numSpheres; ++i) {
-          const Vector3 tmpVel = Vector3(std::rand(), std::rand(), std::rand())/
-              Float(RAND_MAX);
-          _spherePositions[i] = tmpPos*2.0f - Vector3{1.0f};
-          _spherePositions[i].y() *= 0.5f;
-          _sphereVelocities[i] = (tmpVel*2.0f - Vector3{1.0f}).resized(_sphereVelocity);
-          _sphereInstanceData[i].color = Color3{tmpPos};  // Should that be Color4?
-      }
-  }
-      */
+  atom = Particles(numSpheres);
+  _spherePositions[0] = Vector3{
+      static_cast<float>(atom.pars[0]->pos[0] / kScale),
+      static_cast<float>(atom.pars[0]->pos[1] / kScale),
+      static_cast<float>(atom.pars[0]->pos[2] / kScale)};
+  std::cout << "\t sphere pos: " << _spherePositions[0][0]
+              << " electron pos: " << atom.pars[0]->pos[0]
+              << std::endl;
+  _spherePositions[1] = Vector3{0.0f};
+  _sphereInstanceData[0].color = Color4{1.0F, 0.0f, 0.0f, 0.5f};
+  _sphereInstanceData[1].color = Color4{0.8f, 0.3f, 0.0f, 0.5f};
+  _sphereInstanceData[2].color = Color4{0.0f, 0.0f, 1.0f, 0.5f};
+  _sphereInstanceData[3].color = Color4{0.0f, 0.3f, 0.8f, 0.5f};
   {        // Rendering spheres / particles.
       for(std::size_t i = 0; i < numSpheres; ++i) {
           /* Fill in the instance data. Most of these stays the same, except
