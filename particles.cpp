@@ -1,6 +1,7 @@
 // #include <algorithm>
 #include <cassert>
 #include <cmath>   // For M_PI constant and other match functions such as round.
+#include <chrono>  // For logging every 500 ms
 #include <cstdlib> // For rand()
 //#include <deque>
 #include <fstream>
@@ -37,9 +38,9 @@ const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 4;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
-const double kShortDt = .05 / kPFrequency;  // Seconds
+const double kShortDt = .01 / kPFrequency;  // Seconds
 // Use a long dt to make the simulation faster.
-const double kLongDt  = .1  / kEFrequency;  // Seconds
+const double kLongDt  = .01  / kEFrequency;  // Seconds
 // Delta time in seconds.
 double dt = kLongDt - kShortDt / 2;
 // We change the simulation style when particle gets near the speed of light.
@@ -58,6 +59,7 @@ const double kForceTooHigh = 0.3;  // From trial and error.
 double time_ = 0;
 int count = 0;         // Invocation count of moving particles.
 int global_num_particles = 0;
+std::chrono::_V2::system_clock::time_point last_log_time;
 
 class Particle {
 public:
@@ -207,6 +209,52 @@ public:
     return log_line.str();
   }
 
+
+  void ConsiderLoggingToFile(const std::string &log_line_str, double total_energy) {
+    double danger_speed = max_speed_allow / 2;
+
+    bool particles_are_very_close = dist_mag_from_largest < (kCloseToTrouble * 4);
+    bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1) &&
+            (prev_fast_fraction - fast_fraction > 0.1);
+    bool energy_changed = false;
+    /* && is_electron && (
+             std::abs(total_energy / prev_energy)  > 2  // If energy doubles then log.
+             ||      (total_energy * prev_energy) <= 0  // If energy flips sign then log.
+             );
+             */
+    const int ll = 128;  // Limit logging to once every x lines.
+    if (log_count > 0 // || true
+      ||  count%(ll*16) == 0
+      || (count%(ll* 8) == 0 && fast_fraction > 0.01)
+      || (count%(ll* 4) == 0 && fast_fraction < 0.01)
+      || (count%(ll* 2) == 0 && fast_fraction < 0.01 && particles_are_very_close)
+      || (count% ll     == 0 && (is_force_too_high && vel_mag > (danger_speed * 0.95)))
+      || fast_fraction_changed_significantly
+      || energy_changed
+    ) {
+      std::string log_source = " ?";
+      if (log_count > 0) {
+        log_source = " L";
+      } else if (fast_fraction_changed_significantly) {
+        log_source = " F";
+      } else if (energy_changed) {
+        log_source = " E";
+      } else {
+        for (int i = 16; i > 0; i /= 2) {
+          if (count % (ll*i) == 0) {
+            log_source = " " + std::to_string(i);
+            break;
+          }
+        }
+      }
+      log_file << log_line_str << log_source << std::endl;
+      prev_energy = total_energy;
+      prev_fast_fraction = fast_fraction;
+      log_count--;
+    }
+  }
+
+
   void LogStuff() {
     double pos_chng[3];     // Change in position.
     for (int i = 0; i < 3; ++i) {
@@ -215,7 +263,6 @@ public:
     }
     pos_change_magnitude = sqrt(pow(pos_chng[0], 2) + pow(pos_chng[1], 2) + pow(pos_chng[2], 2));
 
-    double danger_speed = max_speed_allow / 2;
     // double potential_energy = kCoulomb * freq_charge * other_charge / dist_mag;
     double kinetic_energy = 0.5 * mass_kg * vel_mag2;
     double total_energy = 0; // potential_energy + kinetic_energy;
@@ -252,61 +299,26 @@ public:
    // << " oth"   << std::setw( 4) << int(round((other_charge / oth->q_amplitude) * 100)) << '%'
    // << " inv"   << std::setw(12) << inverse_exponential
     ;
+    bool logged = false;
     std::string log_line_str = log_line.str();
-    bool particles_are_very_close = dist_mag_from_largest < (kCloseToTrouble * 4);
-    bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1) &&
-            (prev_fast_fraction - fast_fraction > 0.1);
-    bool energy_changed = false;
-    /* && is_electron && (
-             std::abs(total_energy / prev_energy)  > 2  // If energy doubles then log.
-             ||      (total_energy * prev_energy) <= 0  // If energy flips sign then log.
-             );
-             */
-    const int ll = 128;  // Limit logging to once every x lines.
-    if (log_count > 0 // || true
-      ||  count%(ll*16) == 0
-      || (count%(ll* 8) == 0 && fast_fraction > 0.01)
-      || (count%(ll* 4) == 0 && fast_fraction < 0.01)
-      || (count%(ll* 2) == 0 && fast_fraction < 0.01 && particles_are_very_close)
-      || (count% ll     == 0 && (is_force_too_high && vel_mag > (danger_speed * 0.95)))
-      || fast_fraction_changed_significantly
-      || energy_changed
-    ) {
-      std::string log_source = " ?";
-      if (log_count > 0) {
-        log_source = " L";
-      } else if (fast_fraction_changed_significantly) {
-        log_source = " F";
-      } else if (energy_changed) {
-        log_source = " E";
-      } else {
-        for (int i = 16; i > 0; i /= 2) {
-          if (count % (ll*i) == 0) {
-            log_source = " " + std::to_string(i);
-            break;
-          }
-        }
-      }
-      log_line_str = log_line_str + log_source;
-      static int particle_to_log = 0;
-      // Want more logging to file than to both screen and log file.
-      static int logging_to_just_file_count = 0;
-      if (logging_to_just_file_count <= 0 && particle_to_log == id) {
+    static int particle_to_log = 0;
+    if (particle_to_log == id) {      // Log every 500 ms to console.
+      auto now = std::chrono::system_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
+      if (duration.count() > 500) {
         SetColorForConsole();
-        tee << log_line_str << std::endl;
-        logging_to_just_file_count = 32;  // Log to file 32 times as much to both screen and file.
-        particle_to_log = (particle_to_log + 1) % global_num_particles;
-      } else {
-        log_file << log_line_str << std::endl;
+        tee << log_line_str << " t" << std::endl;
+        last_log_time = now;
+        logged = true;
       }
-      logging_to_just_file_count--;
-      prev_energy = total_energy;
-      prev_fast_fraction = fast_fraction;
-      log_count--;
+    }
+    if (!logged) {
+      ConsiderLoggingToFile(log_line_str, total_energy);
     }
     logToBuffer(log_line_str);
     prev_vel_mag = vel_mag;
   }
+
 
   // Is there a formula equivalent to below?
   static double dummiesInverseExponential(double fast_fraction) {
@@ -659,7 +671,7 @@ public:
 
   void moveParticles() {
     const double min_pos_change_desired = 1e-14;
-    const int kMaxTimesToGetSignificantMovement = 4096;
+    const int kMaxTimesToGetSignificantMovement = 4096 * 4;
     double pos_change[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change[j] = 0;
