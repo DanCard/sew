@@ -1,4 +1,5 @@
 // #include <algorithm>
+#include <algorithm>
 #include <cassert>
 #include <cmath>   // For M_PI constant and other match functions such as round.
 #include <chrono>  // For logging every 500 ms
@@ -36,13 +37,14 @@ const double kBohrRadiusProton = kBohrRadius / 10;  // value = swag / trial and 
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 4;
+const int    kPFrequencySubDivisions = 32;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
-const double kShortDt = .01 / kPFrequency;  // Seconds
+const double kShortDt = 1 / (kPFrequency*kPFrequencySubDivisions);
 // Use a long dt to make the simulation faster.
-const double kLongDt  = .01  / kEFrequency;  // Seconds
+const double kLongDt  = 1 / (kEFrequency*kPFrequencySubDivisions);  // Seconds
 // Delta time in seconds.
-double dt = kLongDt - kShortDt / 2;
+double dt = kLongDt;   // Hopefully particles are far enough apart to use long dt.
 // We change the simulation style when particle gets near the speed of light.
 // Instead of using dt, we just simulate the trajectory of the particle.
 // Needed because simulation creates huge errors when there are huge forces.
@@ -58,7 +60,7 @@ const double kForceTooHigh = 0.3;  // From trial and error.
 // Global variables
 double time_ = 0;
 int count = 0;         // Invocation count of moving particles.
-int global_num_particles = 0;
+int num_particles_ = 0;
 std::chrono::_V2::system_clock::time_point last_log_time;
 
 class Particle {
@@ -92,9 +94,10 @@ public:
   // Limit the distance of the particle from 0 to combat energy gain.
   const double max_dist_allow;
   double pos[3] = {0, 0, 0};  // Position
+  double dist_mag[kMaxParticles];
   double dist_from_largest[3]; // Distance from particle exerting largest force.
   double distance_mag_from_origin = 0;
-
+  double dist_mag_from_largest;
 
   double forces[3];           // Sum of all forces from all particles.
   double force_magnitude;
@@ -130,12 +133,19 @@ public:
   double largest_force_mag;   // Largest force mag from a single particle.
   Particle* p_exerting_largest_force;
   int    p_exerting_largest_force_id;
-  double dist_mag_from_largest;
   // Use variable dt to avoid digital simulation errors.
   // Fast fraction informs were we are in the dt range between long and short.
   double fast_fraction = 0;  // Percent we are between long dt and short dt.
   bool   is_force_too_high = false;
   unsigned char color[3] = {128 + 64, 128 + 64, 128 + 64}; // Only used for coloring console output.
+  double potential_energy = 0;
+  int    p_energy_cycle_index = 0;
+  double p_energy_cycle[kPFrequencySubDivisions];
+  double potential_energy_average;
+  int    p_energy_many_index = 0;
+  double p_energy_many[kPFrequencySubDivisions * kPFrequencySubDivisions];
+  double p_energy_many_average;
+  double total_kinetic_energy = 0;
 
 
   explicit Particle(double mass_mev, double mass_kg, double avg_q, double q_amplitude,
@@ -156,6 +166,12 @@ public:
     tee << "\t\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
     tee << "\t\t initial_charge " << initial_charge << std::endl;
+    for (double & p_energy_cycle_ : p_energy_cycle) {
+      p_energy_cycle_ = 0;
+    }
+    for (double & p_energy_many_ : p_energy_many) {
+      p_energy_many_ = 0;
+    }
   }
 
   void logToBuffer(const std::string &s) {
@@ -174,7 +190,7 @@ public:
     int limit = max_lines_to_log < max_prev_log_lines ? max_lines_to_log : max_prev_log_lines;
     for (int i = 0; i < limit; ++i) {
       if (!prev_log_lines[index].empty()) {
-        tee << prev_log_lines[index] << std::endl;
+        tee << prev_log_lines[index] << " P" << std::endl;
       }
       index = (index + 1) % max_prev_log_lines;
     }
@@ -209,6 +225,26 @@ public:
     return log_line.str();
   }
 
+
+  void CalcAveragePotentialEnergy() {
+    double sum = 0;
+    for (double pe : p_energy_cycle) {
+      assert(!std::isnan(pe));
+      assert(!std::isinf(pe));
+      sum += pe;
+    }
+    // std::cout << "sum " << sum << std::endl;
+    potential_energy_average = sum / kPFrequencySubDivisions;
+    sum = 0;
+    for (double pe : p_energy_many) {
+      assert(!std::isnan(pe));
+      assert(!std::isinf(pe));
+      sum += pe;
+    }
+    // std::cout << "sum many " << sum << std::endl;
+    p_energy_many_average = sum / (kPFrequencySubDivisions * kPFrequencySubDivisions);
+  }
+  
 
   void ConsiderLoggingToFile(const std::string &log_line_str, double total_energy) {
     double danger_speed = max_speed_allow / 2;
@@ -256,16 +292,15 @@ public:
 
 
   void LogStuff() {
+    double oth_charge = p_exerting_largest_force->freq_charge;
     double pos_chng[3];     // Change in position.
     for (int i = 0; i < 3; ++i) {
       pos_chng[i] = this->vel[i] * dt;
       this->pos[i] += pos_chng[i];
     }
     pos_change_magnitude = sqrt(pow(pos_chng[0], 2) + pow(pos_chng[1], 2) + pow(pos_chng[2], 2));
-
-    // double potential_energy = kCoulomb * freq_charge * other_charge / dist_mag;
-    double kinetic_energy = 0.5 * mass_kg * vel_mag2;
-    double total_energy = 0; // potential_energy + kinetic_energy;
+    CalcAveragePotentialEnergy();
+    double total_energy = potential_energy_average + total_kinetic_energy;
 
     std::ostringstream log_line;
     log_line
@@ -285,31 +320,30 @@ public:
       << Log3dArray(vel     , "v"  )
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change
    // << Log3dArray(pos_chng, "chng") << std::setprecision(1)
-      /*
-      << " pe"    << std::setw(10) << potential_energy
-      << " ke"    << std::setw(10) << kinetic_energy
-      << " te"    << std::setw(10) << total_energy << std::fixed << std::setprecision(1)
-      */
-      << " dt"    << std::setw( 9) << dt << " new " << new_dt
-      
-      << " fast"    << std::setw(8) << fast_fraction
+      << " dt"    << std::setw( 9) << dt << " new " << new_dt << std::setprecision(3)
+      << " fast"    << std::setw(9) << fast_fraction << std::setprecision(1)
       << std::fixed << std::setw(5) << round(fast_fraction * 10) * 10 << '%'
       << std::fixed
       << " chrg"  << std::setw( 4) << int(round((freq_charge/avg_q)*100)) << '%'
-   // << " oth"   << std::setw( 4) << int(round((other_charge / oth->q_amplitude) * 100)) << '%'
+      << " oth"   << std::setw( 4) << int(round((oth_charge / p_exerting_largest_force->q_amplitude) * 100)) << '%'
    // << " inv"   << std::setw(12) << inverse_exponential
+      << std::scientific << std::setprecision(0)
+      << " pe"    << std::setw(7) << potential_energy_average << " " << std::setw(6) << p_energy_many_average
+      << " ke"    << std::setw(6) << total_kinetic_energy
+      << " te"    << std::setw(6) << total_energy
     ;
     bool logged = false;
     std::string log_line_str = log_line.str();
     static int particle_to_log = 0;
-    if (particle_to_log == id) {      // Log every 500 ms to console.
+    if (particle_to_log == id) {      // Log every second to console.
       auto now = std::chrono::system_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
-      if (duration.count() > 500) {
+      if (duration.count() > 1250) {
         SetColorForConsole();
-        tee << log_line_str << " t" << std::endl;
+        tee << log_line_str << std::endl;
         last_log_time = now;
         logged = true;
+        particle_to_log = (particle_to_log + 1) % num_particles_;
       }
     }
     if (!logged) {
@@ -481,6 +515,18 @@ public:
     */
   }
 
+  void InitVarsToCalcForces() {
+    largest_force_mag = 0;
+    is_force_too_high = false;
+    p_exerting_largest_force = nullptr;
+    for (double & force : forces) {
+      force = 0;
+    }
+    for (int i=0; i<num_particles_; ++i) {
+      dist_mag[i] = 0;
+    }
+  }
+
 
   void CalcForcesFromParticle(Particle* oth /* other particle */) {
     int oth_id = oth->id;
@@ -497,6 +543,7 @@ public:
     }
     double dist_mag2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
     double dist_mag  = sqrt(dist_mag2);
+    this->dist_mag[oth_id] = dist_mag;
     double dist_unit_vector[3];
     for (int i = 0; i < 3; ++i) {
       dist_unit_vector[i] = dist[i] / dist_mag;
@@ -522,15 +569,6 @@ public:
       for (int i = 0; i < 3; ++i) {
         dist_from_largest[i] = dist[i];
       }
-    }
-  }
-
-  void InitVarsToCalcForces() {
-    largest_force_mag = 0;
-    is_force_too_high = false;
-    p_exerting_largest_force = nullptr;
-    for (int i=0; i<3; ++i) {
-      forces[i] = 0;
     }
   }
 
@@ -611,14 +649,15 @@ public:
    kMaxSpeedProton, kBohrRadiusProton, id, false) {}
 };
 
-class __attribute__((unused)) Particles {
+
+class Particles {
 public:
   Particle * pars[kMaxParticles];  // par[ticle]s
   int num_particles = 0;
 
   explicit Particles(int numParticles) : num_particles(numParticles) {
     if (num_particles == 0) return;
-    global_num_particles = num_particles;
+    num_particles_ = num_particles;
     std::cout << "\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     std::cout << "\t\t kBohrMagneton " << kBohrMagneton
               << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
@@ -653,9 +692,33 @@ public:
     pars[3]->color[1] = 128 + 64 + 32;
   }
 
-  void LogParticles() {
-    for (int i=0; i<num_particles; ++i) {
-      pars[i]->LogStuff();
+  void CalcEnergyAndLog() {
+    // Calculate potential energy.
+    for (int i = 0; i < num_particles; ++i) {
+      pars[i]->potential_energy = 0;
+    }
+    double potential_energy = 0;
+    double total_kinetic_energy = 0;
+    // Potential energy = sum of all potential energies.
+    // Set the potential energy for each pair of particles.
+    for (int i = 0; i < num_particles; ++i) {
+      Particle* p1 = pars[i];
+      total_kinetic_energy += 0.5 * p1->mass_kg * p1->vel_mag2;
+      for (int j = i+1; j < num_particles; ++j) {
+        Particle* p2 = pars[j];
+        assert(p1->dist_mag[j] != 0);
+        potential_energy += kCoulomb * p1->freq_charge * p2->freq_charge / p1->dist_mag[j];
+      }
+    }
+    for (int i = 0; i < num_particles; ++i) {
+      Particle* p = pars[i];
+      p->potential_energy = potential_energy;
+      p->p_energy_cycle[p->p_energy_cycle_index] = potential_energy;
+      p->p_energy_many [p->p_energy_many_index ] = potential_energy;
+      p->p_energy_cycle_index = (p->p_energy_cycle_index + 1) % kPFrequencySubDivisions;
+      p->p_energy_many_index  = (p->p_energy_many_index  + 1) % (kPFrequencySubDivisions * kPFrequencySubDivisions);
+      p->total_kinetic_energy = total_kinetic_energy;
+      p->LogStuff();
     }
     count++;
   }
@@ -687,12 +750,10 @@ public:
       // Find the shortest dt and set the new dt to that.
       dt = pars[0]->new_dt;
       for (int j = 1; j < num_particles; ++j) {
-        if (pars[j]->new_dt < dt) {
-          dt = pars[j]->new_dt;
-        }
+        dt = std::min(pars[j]->new_dt, dt);
       }
       // std::cout << "\t dt " << std::scientific << dt << std::endl;
-      LogParticles();
+      CalcEnergyAndLog();
       time_ += dt;
       for (int j = 0; j < num_particles; ++j) {
         if (pos_change[j] > min_pos_change_desired) {
