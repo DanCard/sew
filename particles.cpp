@@ -37,14 +37,12 @@ const double kBohrRadiusProton = kBohrRadius / 10;  // value = swag / trial and 
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 4;
-const int    kPFrequencySubDivisions = 64;
+const int    kPFrequencySubDivisions = 128;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
-const double kShortDt = .01 / (kPFrequency*kPFrequencySubDivisions);
+const double kShortDt = .01 / ( kPFrequency * kPFrequencySubDivisions );
 // Use a long dt to make the simulation faster.
-const double kLongDt  =  10 / (kEFrequency*kPFrequencySubDivisions);  // Seconds
-// Delta time in seconds.
-double dt = kLongDt;   // Hopefully particles are far enough apart to use long dt.
+const double kLongDt  =  10 / ( kEFrequency * kPFrequencySubDivisions );  // Seconds
 // We change the simulation style when particle gets near the speed of light.
 // Instead of using dt, we just simulate the trajectory of the particle.
 // Needed because simulation creates huge errors when there are huge forces.
@@ -58,8 +56,11 @@ const double kForceTooHigh = 0.3;  // From trial and error.
 
 
 // Global variables
+// Delta time in seconds.
+double dt = kLongDt;   // Hopefully particles are far enough apart to use long dt.
 double time_ = 0;
 int count = 0;         // Invocation count of moving particles.
+
 int num_particles_ = 0;
 std::chrono::_V2::system_clock::time_point last_log_time;
 
@@ -219,32 +220,31 @@ public:
     return log_line.str();
   }
 
-  double p_energy_cycle[kPFrequencySubDivisions];
+
   double potential_energy_average;
-  double p_energy_many[kPFrequencySubDivisions * kPFrequencySubDivisions];
   double p_energy_many_average;
+  // Below block of variables only used in below method.
+  static const int kManyBuffersMultiplier = 32;
+  static const int kTotalBuffersForMany = kPFrequencySubDivisions * kManyBuffersMultiplier;
+  double p_energy_cycle[kPFrequencySubDivisions];
+  double p_energy_many[kTotalBuffersForMany];
   int    p_energy_cycle_index = 0;
   int    p_energy_many_index = 0;
-  int    p_energy_cycle_index_minus_1 = kPFrequencySubDivisions - 1;
-  double sum_p_energy = 0;
-  double sum_p_energy_many = 0;
+  double sum_p_energy = 0;        // Only used in below method.
+  double sum_p_energy_many = 0;   // Only used in below method.
 
   void CalcAveragePotentialEnergy() {
     sum_p_energy += p_energy_cycle[p_energy_cycle_index++];
-    sum_p_energy -= p_energy_cycle[p_energy_cycle_index_minus_1--];
-    // Loop indexes if necessary
     p_energy_cycle_index = p_energy_cycle_index % kPFrequencySubDivisions;
-    if (p_energy_cycle_index_minus_1 < 0) p_energy_cycle_index_minus_1 = kPFrequencySubDivisions - 1;
+    // Subtract the potential energy that is going to roll off our average.
+    sum_p_energy -= p_energy_cycle[p_energy_cycle_index];
     potential_energy_average = sum_p_energy / kPFrequencySubDivisions;
 
     sum_p_energy_many += p_energy_many[p_energy_many_index++];
-    sum_p_energy_many -= p_energy_many[p_energy_cycle_index_minus_1--];
-    // Loop indexes if necessary
-    p_energy_many_index = p_energy_many_index % (kPFrequencySubDivisions * kPFrequencySubDivisions);
-    if (p_energy_cycle_index_minus_1 < 0)
-      p_energy_cycle_index_minus_1 = (kPFrequencySubDivisions * kPFrequencySubDivisions) - 1;
-
-    p_energy_many_average = sum_p_energy_many / (kPFrequencySubDivisions * kPFrequencySubDivisions);
+    p_energy_many_index = p_energy_many_index % kTotalBuffersForMany;
+    // Subtract the potential energy that is going to roll off our average.
+    sum_p_energy_many -= p_energy_many[p_energy_many_index];
+    p_energy_many_average = sum_p_energy_many / kTotalBuffersForMany;
   }
   
 
@@ -308,6 +308,8 @@ public:
     log_line
       << std::setw( 7) << count << (is_electron ? " e" : " p") << id
       << std::scientific << std::setprecision(1)
+      << " v mag "  << vel_mag
+      << Log3dArray(vel     , "v"  )
    // << Log3dArray(pos     , "pos")
       << " d mag" << std::setw(9) << dist_mag_from_largest << std::setprecision(1)
       << Log3dArray(forces  , " fs") << std::setprecision(1)
@@ -318,12 +320,11 @@ public:
    // << Log3dArray(m_bg_f, "Bg"   )
    // << Log3dArray(mf_q2, "Bq2"   ) << std::setprecision(1)
    // << Log3dArray(acceleration, "a")
-      << " v mag "  << vel_mag
-      << Log3dArray(vel     , "v"  )
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change
    // << Log3dArray(pos_chng, "chng") << std::setprecision(1)
-      << "  dt"     << std::setw( 9) << dt << " new " << new_dt << std::setprecision(2)
-      << " fast"    << std::setw(9) << fast_fraction << std::setprecision(1)
+   // << "  dt"     << std::setw( 9) << dt << " new " << new_dt << std::setprecision(2)
+      << " fast"    // << std::setw(9) << fast_fraction
+      << std::setprecision(1)
       << std::fixed << std::setw(5) << round(fast_fraction * 10) * 10 << '%'
       << std::fixed
       << " chrg"  << std::setw( 4) << int(round((freq_charge/avg_q)*100)) << '%'
@@ -361,6 +362,7 @@ public:
     // Slow = how close to short dt.
     // Fast = how close to long dt.
     double slow_fraction = 1 - fast_fraction;
+
     // from 0 to 90% return 0 to 90%
     // from 90% to 95% return 90% to 99%
     // from 95% to 97% return 99% to 99.9%
@@ -390,12 +392,14 @@ public:
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
     // fast_fraction < 0 when distance shorter than kCloseToTrouble.
-    // fast_fraction > 1 when distance is further than kBohrRadius.
-    fast_fraction = (dist_mag_from_largest - kCloseToTrouble) / (kBohrRadius - kCloseToTrouble);
+    // fast_fraction > 1 when distance is further than (kBohrRadius / 4).
+    fast_fraction = (dist_mag_from_largest - kCloseToTrouble) / ((kBohrRadius/4) - kCloseToTrouble);
     if (fast_fraction > 1) {
       fast_fraction = 1;
+      return kLongDt;
     } else if (fast_fraction < 0) {
       fast_fraction = 0;
+      return kShortDt;
     }
     *fast_fraction_ptr = fast_fraction;
     double inverse_exponential = dummiesInverseExponential(fast_fraction);
@@ -404,8 +408,7 @@ public:
     } else if (inverse_exponential < 0) {
       inverse_exponential = 0;
     }
-    new_dt = kLongDt + ((kShortDt - kLongDt) * inverse_exponential);
-    return new_dt;  // Not used.
+    return kLongDt + ((kShortDt - kLongDt) * inverse_exponential);
   }
 
   void HandleEscape() {
@@ -633,7 +636,7 @@ public:
     }
     vel_mag2 = pow(vel[0], 2) + pow(vel[1], 2) + pow(vel[2], 2);
     vel_mag  = sqrt(vel_mag2);
-    CalcNewDt(&fast_fraction);
+    new_dt = CalcNewDt(&fast_fraction);
     // When particles are on top of each other forces approach infinity.
     // To get around that problem we teleport to other side of particle.
     // Alternative approach is to have a preprogrammed path and not bother with force calcs.
