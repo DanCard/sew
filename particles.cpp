@@ -30,10 +30,10 @@ const double kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wi
 const double kEMassKg = 9.1093837015e-31;   // kg
 const double kPMassKg = 1.67262192369e-27;  // kg
 const double kBohrRadius = 5.29177210903e-11;  // Meters
-                                               // https://en.wikipedia.org/wiki/Bohr_magneton
-const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg);
-const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
 const double kBohrRadiusProton = kBohrRadius / 10;  // value = swag / trial and error
+                                               
+const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
+const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 4;
@@ -238,13 +238,15 @@ public:
     p_energy_cycle_index = p_energy_cycle_index % kPFrequencySubDivisions;
     // Subtract the potential energy that is going to roll off our average.
     sum_p_energy -= p_energy_cycle[p_energy_cycle_index];
-    potential_energy_average = sum_p_energy / kPFrequencySubDivisions;
+    // -1 because of the buffer subtracted above.
+    potential_energy_average = sum_p_energy / (kPFrequencySubDivisions - 1);
 
     sum_p_energy_many += p_energy_many[p_energy_many_index++];
     p_energy_many_index = p_energy_many_index % kTotalBuffersForMany;
     // Subtract the potential energy that is going to roll off our average.
     sum_p_energy_many -= p_energy_many[p_energy_many_index];
-    p_energy_many_average = sum_p_energy_many / kTotalBuffersForMany;
+    // -1 because of the buffer subtracted above.
+    p_energy_many_average = sum_p_energy_many / (kTotalBuffersForMany - 1);
   }
   
 
@@ -322,7 +324,7 @@ public:
    // << Log3dArray(acceleration, "a")
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change
    // << Log3dArray(pos_chng, "chng") << std::setprecision(1)
-   // << "  dt"     << std::setw( 9) << dt << " new " << new_dt << std::setprecision(2)
+      << "  dt"     << std::setw( 9) << dt << " new " << new_dt
       << " fast"    // << std::setw(9) << fast_fraction
       << std::setprecision(1)
       << std::fixed << std::setw(5) << round(fast_fraction * 10) * 10 << '%'
@@ -556,6 +558,7 @@ public:
     // Current charge varies based on frequency and time.
     freq_charge = GetSinusoidalChargeValue();
     double other_charge = oth->GetSinusoidalChargeValue();
+    bool forces_attract = (freq_charge * other_charge) < 0;
     double force[3];
     // When opposite charges, force1 is negative.  When same charges, force1 is positive.
     double eforce_magnitude = kCoulomb * freq_charge * other_charge / dist_mag2;
@@ -566,7 +569,7 @@ public:
       forces[i] += force[i];  // main return values used.
     }
     force_magnitude = sqrt(pow(force[0], 2) + pow(force[1], 2) + pow(force[2], 2));
-    if (force_magnitude > largest_force_mag) {
+    if (force_magnitude > largest_force_mag && forces_attract) {
       p_exerting_largest_force = oth;
       p_exerting_largest_force_id = oth_id;
       largest_force_mag = force_magnitude;
@@ -717,7 +720,7 @@ public:
       for (int j = i+1; j < num_particles; ++j) {
         Particle* p2 = pars[j];
         assert(p1->dist_mag[j] != 0);
-        potential_energy += kCoulomb * p1->freq_charge * p2->freq_charge / p1->dist_mag[j];
+        potential_energy += - kCoulomb * p1->freq_charge * p2->freq_charge / p1->dist_mag[j];
       }
     }
     for (int i = 0; i < num_particles; ++i) {
@@ -742,8 +745,45 @@ public:
     }
   }
 
+
+  // When electron and proton are close, things are exciting.  Not worried about things moving fast enough.
+  // When far apart then lets speed simulation up by not waiting on screen refresh.
+  double CalcMinPosChangeDesired() {
+    // I'd hate to see an electron fly across the screen faster than a second.
+    // Assumes screen refresh rate is 60 HZ.
+    const double kMaxPosChangeDesired = kBohrRadius / 60;
+    const double kMinPosChangeDesired = 1e-14;
+    if (count == 0) return 0;
+    // Select electron that is having the highest attractive forces.
+    Particle* e = pars[0];
+    for (int i=1; i<(num_particles/2); ++i) {
+      Particle* oth = pars[i];
+      if (e->dist_mag_from_largest > oth->dist_mag_from_largest) {
+        e = oth;
+      }
+    }
+    double distance = e->dist_mag_from_largest;
+    // If we are at or under danger distance, then min change desired should be small.
+    // If we are far from danger, then min change desired should be big.
+    // How close to danger distance are we?
+    double danger_percent = distance / (kMaxPosChangeDesired - kCloseToTrouble);
+    double min_pos_change_desired = kMinPosChangeDesired + ((kMaxPosChangeDesired - kMinPosChangeDesired) * danger_percent);
+    if (min_pos_change_desired < kMinPosChangeDesired)
+      min_pos_change_desired = kMinPosChangeDesired;
+    else if (min_pos_change_desired > kMaxPosChangeDesired)
+      min_pos_change_desired = kMaxPosChangeDesired;
+    return min_pos_change_desired;
+  }
+
+  // Called once for every screen draw.
   void moveParticles() {
-    const double min_pos_change_desired = 1e-14;
+    // Loop without waiting on screen refresh to make simulation run faster.
+    double min_pos_change_desired = CalcMinPosChangeDesired();
+
+    // I kept raising this value until a cpu core was at 100% usage.  Then I cut it in half.
+    // Things were too slow, so this looping was a method of increasing speed, by not waiting
+    // on screen refresh.
+    // If CPU is pegged then that means we are taking too long to draw a frame.
     const int kMaxTimesToGetSignificantMovement = 4096 * 4;
     double pos_change[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
