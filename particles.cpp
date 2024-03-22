@@ -225,20 +225,26 @@ public:
   double p_energy_many_average;
   int    p_energy_cycle_index = 0;
   int    p_energy_many_index = 0;
+  int    p_energy_cycle_index_minus_1 = kPFrequencySubDivisions - 1;
   double sum_p_energy = 0;
   double sum_p_energy_many = 0;
 
   void CalcAveragePotentialEnergy() {
-    sum_p_energy += p_energy_cycle[p_energy_cycle_index];
-    sum_p_energy -= p_energy_cycle[p_energy_cycle_index-1];
-    // std::cout << "sum " << sum << std::endl;
-    potential_energy_average = sum / kPFrequencySubDivisions;
-    sum = 0;
-    for (double pe : p_energy_many) {
-      sum += pe;
-    }
-    // std::cout << "sum many " << sum << std::endl;
-    p_energy_many_average = sum / (kPFrequencySubDivisions * kPFrequencySubDivisions);
+    sum_p_energy += p_energy_cycle[p_energy_cycle_index++];
+    sum_p_energy -= p_energy_cycle[p_energy_cycle_index_minus_1--];
+    // Loop indexes if necessary
+    p_energy_cycle_index = p_energy_cycle_index % kPFrequencySubDivisions;
+    if (p_energy_cycle_index_minus_1 < 0) p_energy_cycle_index_minus_1 = kPFrequencySubDivisions - 1;
+    potential_energy_average = sum_p_energy / kPFrequencySubDivisions;
+
+    sum_p_energy_many += p_energy_many[p_energy_many_index++];
+    sum_p_energy_many -= p_energy_many[p_energy_cycle_index_minus_1--];
+    // Loop indexes if necessary
+    p_energy_many_index = p_energy_many_index % (kPFrequencySubDivisions * kPFrequencySubDivisions);
+    if (p_energy_cycle_index_minus_1 < 0)
+      p_energy_cycle_index_minus_1 = (kPFrequencySubDivisions * kPFrequencySubDivisions) - 1;
+
+    p_energy_many_average = sum_p_energy_many / (kPFrequencySubDivisions * kPFrequencySubDivisions);
   }
   
 
