@@ -37,12 +37,12 @@ const double kBohrRadiusProton = kBohrRadius / 10;  // value = swag / trial and 
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 4;
-const int    kPFrequencySubDivisions = 32;
+const int    kPFrequencySubDivisions = 64;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
-const double kShortDt = 1 / (kPFrequency*kPFrequencySubDivisions);
+const double kShortDt = .01 / (kPFrequency*kPFrequencySubDivisions);
 // Use a long dt to make the simulation faster.
-const double kLongDt  = 1 / (kEFrequency*kPFrequencySubDivisions);  // Seconds
+const double kLongDt  =  10 / (kEFrequency*kPFrequencySubDivisions);  // Seconds
 // Delta time in seconds.
 double dt = kLongDt;   // Hopefully particles are far enough apart to use long dt.
 // We change the simulation style when particle gets near the speed of light.
@@ -139,12 +139,6 @@ public:
   bool   is_force_too_high = false;
   unsigned char color[3] = {128 + 64, 128 + 64, 128 + 64}; // Only used for coloring console output.
   double potential_energy = 0;
-  int    p_energy_cycle_index = 0;
-  double p_energy_cycle[kPFrequencySubDivisions];
-  double potential_energy_average;
-  int    p_energy_many_index = 0;
-  double p_energy_many[kPFrequencySubDivisions * kPFrequencySubDivisions];
-  double p_energy_many_average;
   double total_kinetic_energy = 0;
 
 
@@ -225,20 +219,22 @@ public:
     return log_line.str();
   }
 
+  double p_energy_cycle[kPFrequencySubDivisions];
+  double potential_energy_average;
+  double p_energy_many[kPFrequencySubDivisions * kPFrequencySubDivisions];
+  double p_energy_many_average;
+  int    p_energy_cycle_index = 0;
+  int    p_energy_many_index = 0;
+  double sum_p_energy = 0;
+  double sum_p_energy_many = 0;
 
   void CalcAveragePotentialEnergy() {
-    double sum = 0;
-    for (double pe : p_energy_cycle) {
-      assert(!std::isnan(pe));
-      assert(!std::isinf(pe));
-      sum += pe;
-    }
+    sum_p_energy += p_energy_cycle[p_energy_cycle_index];
+    sum_p_energy -= p_energy_cycle[p_energy_cycle_index-1];
     // std::cout << "sum " << sum << std::endl;
     potential_energy_average = sum / kPFrequencySubDivisions;
     sum = 0;
     for (double pe : p_energy_many) {
-      assert(!std::isnan(pe));
-      assert(!std::isinf(pe));
       sum += pe;
     }
     // std::cout << "sum many " << sum << std::endl;
@@ -316,11 +312,11 @@ public:
    // << Log3dArray(m_bg_f, "Bg"   )
    // << Log3dArray(mf_q2, "Bq2"   ) << std::setprecision(1)
    // << Log3dArray(acceleration, "a")
-      << " v mag " << vel_mag
+      << " v mag "  << vel_mag
       << Log3dArray(vel     , "v"  )
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change
    // << Log3dArray(pos_chng, "chng") << std::setprecision(1)
-      << " dt"    << std::setw( 9) << dt << " new " << new_dt << std::setprecision(3)
+      << "  dt"     << std::setw( 9) << dt << " new " << new_dt << std::setprecision(2)
       << " fast"    << std::setw(9) << fast_fraction << std::setprecision(1)
       << std::fixed << std::setw(5) << round(fast_fraction * 10) * 10 << '%'
       << std::fixed
@@ -596,14 +592,19 @@ public:
     }
     // dot product between force and velocity.
     double dot_product = v[0] * f[0] + v[1] * f[1] + v[2] * f[2];
-    bool force_same_dir_as_v = dot_product < .25;    // .25 = guess = 45 degrees?
+    // If the vectors are pointing in the same direction (aligned), their dot product is 1.
+    // If they are perpendicular, it's 0. If they are pointing in opposite directions, it's -1.
+    bool force_same_dir_as_v = dot_product > .75;    // .75 = guess = ? degrees
     if (!force_same_dir_as_v) return;
 
     oth->log_prev_log_lines(4);
     log_prev_log_lines();
-    tee << "\t\t " << (is_electron ? "electron" : "proton") << id
-        << " forces " << forces[0] << " " << forces[1] << " " << forces[2] << std::endl;
-    tee << "\t Force too high.  Dist " << dist_mag_from_largest << "  Teleporting to other side of "
+    tee << "\t Force too high. " << (is_electron ? "e" : "p") << id << "  dot product " << dot_product
+        << "  f mag " << force_magnitude
+        << " x " << forces[0] << " y " << forces[1] << " z " << forces[2] << std::endl;
+    tee << "\t\t\t velocity unit vector: " << v[0] << " y " << v[1] << " " << v[2]
+        << "\t force unit vector: " << f[0] << " y " << f[1] << " " << f[2] << std::endl;
+    tee << "  Dist " << dist_mag_from_largest << "  Teleporting to other side of "
         << (oth->is_electron ? "electron" : "proton")
         << ".  pos " << pos[0] << " " << pos[1] << " " << pos[2]
         << "  oth pos " << oth->pos[0] << " " << oth->pos[1] << " " << oth->pos[2]
@@ -638,7 +639,7 @@ public:
 class Electron : public Particle {
 public:
   explicit Electron(int id) : Particle(kEMassMEv, kEMassKg, -kQ, -kQ,
-   kMaxSpeedElectron, kBohrRadius, id, true) {}
+   kMaxSpeedElectron, kBohrRadius * 2, id, true) {}
 };
 
 class Proton : public Particle {
@@ -676,7 +677,7 @@ public:
           Electron in the middle with charge -2e.
       */
       if (i > 1) {
-        pars[i]->pos[1] = (kBohrRadiusProton / 2) * (i%2 == 0 ? 1 : -1);
+        pars[i]->pos[1] = (kBohrRadiusProton * 0.75) * (i%2 == 0 ? 1 : -1);
       }
       std::cout << "\t" << (pars[i]->is_electron ? "electron" : "proton") << " " << i
                 << "  pos " << pars[i]->pos[0] << " " << pars[i]->pos[1] << " " << pars[i]->pos[2]
