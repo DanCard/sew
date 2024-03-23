@@ -96,7 +96,8 @@ public:
   // Limit the distance of the particle from 0 to combat energy gain.
   const double max_dist_allow;
   double pos[3] = {0, 0, 0};  // Position
-  double pos_chng[3];     // Change in position.
+  double pos_change_3d[3];     // Change in position.
+  double pos_change_magnitude;
 
   double dist_mag[kMaxParticles];
   double dist_from_largest[3]; // Distance from particle exerting largest force.
@@ -113,7 +114,6 @@ public:
   // double vel_uv_old[3];
   // double vel_dot_product;
   double new_dt = 0;          // Global dt = smallest new dt.
-  double pos_change_magnitude;
 
   // Only used for debug.  Not used in simulation calculations.
   const int id;            // Unique id for each particle.  Just used for logging.
@@ -256,37 +256,28 @@ public:
   }
   
 
-  void ConsiderLoggingToFile(const std::string &log_line_str) {
+  void ConsiderLoggingToFile() {
     double danger_speed = max_speed_allow / 2;
 
-    bool particles_are_close = dist_mag_from_largest < kCloseToTrouble;
-    bool particles_are_very_close = dist_mag_from_largest < (kCloseToTrouble/2);
+    bool particles_are_close      = dist_mag_from_largest <  kCloseToTrouble;
+    bool particles_are_close_very = dist_mag_from_largest < (kCloseToTrouble/2);
     bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1) &&
             (prev_fast_fraction - fast_fraction > 0.1);
-    bool energy_changed = false;
-    /* && is_electron && (
-             std::abs(total_energy / prev_energy)  > 2  // If energy doubles then log.
-             ||      (total_energy * prev_energy) <= 0  // If energy flips sign then log.
-             );
-             */
-    const int ll = 32;  // Limit logging to once every x lines.
+    const int ll = 8;  // Limit logging to once every x lines.
     if (log_count > 0 // || true
       ||  count%(ll*32) == 0
       || (count%(ll*16) == 0 && fast_fraction < 0.1)
       || (count%(ll* 8) == 0 && fast_fraction < 0.01)
       || (count%(ll* 4) == 0 && fast_fraction < 0.001  && particles_are_close)
-      || (count%(ll* 2) == 0 && fast_fraction < 0.0001 && particles_are_very_close)
-      || (count% ll     == 0 && (particles_are_very_close && vel_mag > (danger_speed * 0.95)))
+      || (count%(ll* 2) == 0 && fast_fraction < 0.0001 && particles_are_close_very)
+      || (count% ll     == 0 && vel_mag > danger_speed && particles_are_close_very)
       || fast_fraction_changed_significantly
-      || energy_changed
     ) {
       std::string log_source = " ?";
       if (log_count > 0) {
         log_source = " L";
       } else if (fast_fraction_changed_significantly) {
         log_source = " F";
-      } else if (energy_changed) {
-        log_source = " E";
       } else {
         for (int i = 16; i > 0; i /= 2) {
           if (count % (ll*i) == 0) {
@@ -295,17 +286,17 @@ public:
           }
         }
       }
+      const std::string log_line_str = FormatLogLine();
       log_file << log_line_str << log_source << std::endl;
       prev_fast_fraction = fast_fraction;
       log_count--;
+      logToBuffer(log_line_str);
     }
   }
 
 
-  void LogStuff() {
+  std::string FormatLogLine() {
     double oth_charge = p_exerting_largest_force->freq_charge;
-    pos_change_magnitude = sqrt(pow(pos_chng[0], 2) + pow(pos_chng[1], 2) + pow(pos_chng[2], 2));
-    CalcAveragePotentialEnergy();
     double total_energy = potential_energy_average + total_kinetic_energy;
 
     std::ostringstream log_line;
@@ -323,12 +314,15 @@ public:
    // << Log3dArray(m_bg_f, "Bg"   )
    // << Log3dArray(mf_q2, "Bq2"   ) << std::setprecision(1)
    // << Log3dArray(acceleration, "a")
-   // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change
-   // << Log3dArray(pos_chng, "chng") << std::setprecision(1)
+   // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
+   // << Log3dArray(pos_change_3d, "chng") << std::setprecision(1)
    // << Log3dArray(pos     , "pos")
-      << "  dt"   << std::setw( 9) << dt // << " new " << new_dt
-      << " fast"  << std::setprecision(3)   << std::setw(10) <<       fast_fraction
-      << std::setprecision(1) << std::fixed << std::setw( 6) << round(fast_fraction * 10) * 10 << '%'
+   // << "  dt"   << std::setw( 9) << dt // << " new " << new_dt
+   // << " fast"  << std::setprecision(3)   << std::setw(10) << fast_fraction
+      << std::setprecision(1)
+   // << " min pos change " << min_pos_change_desired
+      << std::fixed << std::setw( 6)
+      << round(fast_fraction * 10) * 10 << '%'
       << " chrg"  << std::setw( 4) << int(round((freq_charge/avg_q)*100)) << '%'
       << " oth"   << std::setw( 4) << int(round((oth_charge / p_exerting_largest_force->q_amplitude) * 100)) << '%'
    // << " inv"   << std::setw(12) << inverse_exponential
@@ -339,27 +333,34 @@ public:
     ;
     if (fv_dot_prod_set)
          log_line << " fv⋅" << std::setw( 8) << std::setprecision(3) << fv_dot_product;
-    // else log_line           << std::setw(12) << " ";
+    return log_line.str();
+  }
+
+  void LogLess() {  // Log less stuff.
+    CalcAveragePotentialEnergy();
+
     bool logged = false;
-    std::string log_line_str = log_line.str();
+    std::string log_line_str;
     static int particle_to_log = 0;
-    if (particle_to_log == id || log_count > 0) {      // Log every second to console.
+    if (particle_to_log == id || log_count > 0) {      // Log based on time interval to console.
       auto now = std::chrono::system_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
       if (log_count > 0 || duration.count() > 800) {
         SetColorForConsole();
+        log_line_str = FormatLogLine();
         tee << log_line_str << std::endl;
         last_log_time = now;
         logged = true;
         particle_to_log = (particle_to_log + 1) % num_particles_;
         log_count--;
+        logToBuffer(log_line_str);
       }
     }
     if (!logged) {
-      ConsiderLoggingToFile(log_line_str);
+      ConsiderLoggingToFile();
     }
-    logToBuffer(log_line_str);
   }
+
 
   void HandleEscape() {
     log_prev_log_lines();
@@ -374,7 +375,7 @@ public:
     assert(pos[0] != 0 || pos[1] != 0 || pos[2] != 0);
     // We want the magnitude to be under the bohr radius.
     // Distance to shave off.  Subtract 1% to keep things safe.
-    double dist_to_shave = ( max_dist_allow / distance_mag_from_origin ) - 0.01;
+    double dist_to_shave = ( max_dist_allow / distance_mag_from_origin ) - 0.05;
     // tee << "  dist_to_shave " << dist_to_shave;
     for (double & po : pos) {
       po = po * dist_to_shave;
@@ -388,9 +389,9 @@ public:
 
   // Get the charge that is based on freq and thus time.
   double GetSinusoidalChargeValue() const {
-    // if dt > 0.1 / frequency, then charge is constant.
+    // if dt > 0.25 / frequency, then charge is constant.
     // Can't simulate sinusoidal charge when dt is large.
-    if (dt > (0.2/frequency)) {
+    if (dt > (0.25/frequency)) {
       return avg_q;
     }
     /*
@@ -571,11 +572,12 @@ public:
 
   // When forces are very high we should slow down delta time (dt)
   double CalcNewDt(double * fast_fraction_ptr) {
+    const double safe_distance = 4e-12;
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
     // fast_fraction < 0 when distance shorter than kCloseToTrouble.
     // fast_fraction > 1 when distance is further than (kBohrRadius / 8).
-    fast_fraction = (dist_mag_from_largest - kCloseToTrouble) / (4e12 - kCloseToTrouble);
+    fast_fraction = (dist_mag_from_largest - kCloseToTrouble) / (safe_distance - kCloseToTrouble);
     if (fast_fraction > 1) {
       fast_fraction = 1;
       return kLongDt;
@@ -653,11 +655,12 @@ public:
     vel_mag  = sqrt(vel_mag2);
     new_dt = CalcNewDt(&fast_fraction);
     for (int i = 0; i < 3; ++i) {
-      pos_chng[i]  = vel[i] * dt;
-      pos     [i] += pos_chng[i];
+      pos_change_3d[i]  = vel[i] * dt;
+      pos     [i] += pos_change_3d[i];
       // vel_uv_old[i] = vel_uv[i];
       vel_uv    [i] = vel   [i] / vel_mag;
     }
+    pos_change_magnitude = sqrt(pow(pos_change_3d[0], 2) + pow(pos_change_3d[1], 2) + pow(pos_change_3d[2], 2));
     // vel_dot_product = vel_uv[0] * vel_uv_old[0] + vel_uv[1] * vel_uv_old[1] + vel_uv[2] * vel_uv_old[2];
     // When particles are on top of each other forces approach infinity.
     // To get around that problem we teleport to other side of particle.
@@ -690,7 +693,7 @@ public:
   explicit Particles(int numParticles) : num_particles(numParticles) {
     if (num_particles == 0) return;
     num_particles_ = num_particles;
-    std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron
+    std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
               << "\t kShortDt " << kShortDt << "  kLongDt " << kLongDt << std::endl;
     std::cout << "\t\t\t\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
@@ -745,7 +748,7 @@ public:
       p->p_energy_cycle_index = (p->p_energy_cycle_index + 1) % kPFrequencySubDivisions;
       p->p_energy_many_index  = (p->p_energy_many_index  + 1) % (kPFrequencySubDivisions * kPFrequencySubDivisions);
       p->total_kinetic_energy = total_kinetic_energy;
-      p->LogStuff();
+      p->LogLess();
     }
     count++;
   }
@@ -759,7 +762,6 @@ public:
     }
   }
 
-
   // When electron and proton are close, things are exciting.  Not worried about things moving fast enough.
   // When far apart then lets speed simulation up by not waiting on screen refresh.
   double CalcMinPosChangeDesired() {
@@ -767,7 +769,9 @@ public:
     // Assumes screen refresh rate is 60 HZ.
     const double kMaxPosChangeDesired = (kBohrRadius / 60) / 8;
     const double kMinPosChangeDesired = 1e-14;
-    if (count == 0) return 0;
+    if (count == 0) {
+      return 0;
+    }
     // Select electron that is having the highest attractive forces.
     Particle* e = pars[0];
     for (int i=1; i<(num_particles/2); ++i) {
@@ -781,11 +785,11 @@ public:
     // If we are far from danger, then min change desired should be big.
     // How close to danger distance are we?
     double danger_percent = distance / (kMaxPosChangeDesired - kCloseToTrouble);
-    double min_pos_change_desired = kMinPosChangeDesired + ((kMaxPosChangeDesired - kMinPosChangeDesired) * danger_percent);
-    if (min_pos_change_desired < kMinPosChangeDesired)
-      min_pos_change_desired = kMinPosChangeDesired;
-    else if (min_pos_change_desired > kMaxPosChangeDesired)
-      min_pos_change_desired = kMaxPosChangeDesired;
+         if (danger_percent < 0) danger_percent = 0;
+    else if (danger_percent > 1) danger_percent = 1;
+    double min_pos_change_desired = kMaxPosChangeDesired + ((kMinPosChangeDesired - kMaxPosChangeDesired) * danger_percent);
+         if (min_pos_change_desired < kMinPosChangeDesired) min_pos_change_desired = kMinPosChangeDesired;
+    else if (min_pos_change_desired > kMaxPosChangeDesired) min_pos_change_desired = kMaxPosChangeDesired;
     return min_pos_change_desired;
   }
 
@@ -799,16 +803,16 @@ public:
     // on screen refresh.
     // If CPU is pegged then that means we are taking too long to draw a frame.
     const int kMaxTimesToGetSignificantMovement = 4096 * 4;
-    double pos_change[kMaxParticles];
+    double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
-      pos_change[j] = 0;
+      pos_change_per_particle[j] = 0;
     }
     for (int i = 0; i < kMaxTimesToGetSignificantMovement; ++i) {
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         CalcForcesOnParticle(part_ptr);
         part_ptr->ApplyForcesToParticle();
-        pos_change[j] += std::abs(pars[j]->pos_change_magnitude);
+        pos_change_per_particle[j] += std::abs(pars[j]->pos_change_magnitude);
       }
       // tee << " change " << pos_change << std::endl;
       // Find the shortest dt and set the new dt to that.
@@ -820,7 +824,7 @@ public:
       CalcEnergyAndLog();
       time_ += dt;
       for (int j = 0; j < num_particles; ++j) {
-        if (pos_change[j] > min_pos_change_desired) {
+        if (pos_change_per_particle[j] > min_pos_change_desired) {
           goto exit_loop;
         }
       }
