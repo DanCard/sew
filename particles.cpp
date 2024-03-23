@@ -269,14 +269,14 @@ public:
              ||      (total_energy * prev_energy) <= 0  // If energy flips sign then log.
              );
              */
-    const int ll = 128;  // Limit logging to once every x lines.
+    const int ll = 32;  // Limit logging to once every x lines.
     if (log_count > 0 // || true
       ||  count%(ll*32) == 0
-      || (count%(ll*16) == 0 && fast_fraction > 0.01)
+      || (count%(ll*16) == 0 && fast_fraction < 0.1)
       || (count%(ll* 8) == 0 && fast_fraction < 0.01)
-      || (count%(ll* 4) == 0 && fast_fraction < 0.01 && particles_are_close)
-      || (count%(ll* 2) == 0 && fast_fraction < 0.01 && particles_are_very_close)
-      || (count% ll     == 0 && (particles_are_close && vel_mag > (danger_speed * 0.95)))
+      || (count%(ll* 4) == 0 && fast_fraction < 0.001  && particles_are_close)
+      || (count%(ll* 2) == 0 && fast_fraction < 0.0001 && particles_are_very_close)
+      || (count% ll     == 0 && (particles_are_very_close && vel_mag > (danger_speed * 0.95)))
       || fast_fraction_changed_significantly
       || energy_changed
     ) {
@@ -316,7 +316,7 @@ public:
       << "  dis" << std::setw(10) << dist_mag_from_largest
    //   << " ⋅" << vel_dot_product
       << "  vel "  << vel_mag
-   // << Log3dArray(vel     , "v"  )
+      << Log3dArray(vel     , "v"  )
    // << Log3dArray(forces  , " fs")
       << " f " << std::setprecision(2) << largest_force_mag
    // << Log3dArray(magnet_f, "B"  )
@@ -471,7 +471,7 @@ public:
   }
 
   void InitVarsToCalcForces() {
-    largest_force_mag = 0;
+    largest_force_mag = -1;
     is_force_too_high = false;
     p_exerting_largest_force = nullptr;
     for (double & force : forces) {
@@ -506,7 +506,7 @@ public:
     // Current charge varies based on frequency and time.
     freq_charge = GetSinusoidalChargeValue();
     double other_charge = oth->GetSinusoidalChargeValue();
-    bool forces_attract = (freq_charge * other_charge) < 0;
+    bool forces_attract = (freq_charge * other_charge) <= 0;
     double force[3];
     // When opposite charges, force1 is negative.  When same charges, force1 is positive.
     double eforce_magnitude = kCoulomb * freq_charge * other_charge / dist_mag2;
@@ -517,6 +517,16 @@ public:
       forces[i] += force[i];  // main return values used.
     }
     force_magnitude = sqrt(pow(force[0], 2) + pow(force[1], 2) + pow(force[2], 2));
+    /*
+    if (id == 3 && forces_attract) {
+      std::cout << "\t\t\t force_magnitude " << force_magnitude
+                << "  largest_force_mag " << largest_force_mag
+                << "  forces_attract " << forces_attract
+                << "  oth_id " << oth_id
+                << "  p_exerting_largest_force " << p_exerting_largest_force
+                << std::endl;
+    }
+    */
     if (force_magnitude > largest_force_mag && forces_attract) {
       p_exerting_largest_force = oth;
       p_exerting_largest_force_id = oth_id;
@@ -564,8 +574,8 @@ public:
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
     // fast_fraction < 0 when distance shorter than kCloseToTrouble.
-    // fast_fraction > 1 when distance is further than (kBohrRadius / 4).
-    fast_fraction = (dist_mag_from_largest - kCloseToTrouble) / ((kBohrRadius/4) - kCloseToTrouble);
+    // fast_fraction > 1 when distance is further than (kBohrRadius / 8).
+    fast_fraction = (dist_mag_from_largest - kCloseToTrouble) / (4e12 - kCloseToTrouble);
     if (fast_fraction > 1) {
       fast_fraction = 1;
       return kLongDt;
