@@ -4,11 +4,9 @@
 #include <cmath>   // For M_PI constant and other match functions such as round.
 #include <chrono>  // For logging every 500 ms
 #include <cstdlib> // For rand()
-//#include <deque>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
-// #include <Magnum/Math/Matrix3.h>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -332,7 +330,9 @@ public:
     return log_line.str();
   }
 
-  void LogLess() {  // Log less stuff.
+  // Log less stuff.
+  void LogStuff(volatile int *num_drawing_event_already,
+                volatile int *num_wait_for_drawing_event) {
     CalcAveragePotentialEnergy();
 
     static int particle_to_log = 0;                // Log one of our standing EM waves at a time.
@@ -341,7 +341,11 @@ public:
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
       if (log_count > 0 || duration.count() > 1000) {
         SetColorForConsole();
-        std::string log_line_str = FormatLogLine();
+        std::string log_line_str = FormatLogLine()
+          + " L " + std::to_string(*num_drawing_event_already)    // Late.  Drawing event already occurred.
+          + " E " + std::to_string(*num_wait_for_drawing_event);  // Calcs were early.  Waited on drawing event.
+        *num_drawing_event_already = 0;
+        *num_wait_for_drawing_event     = 0;
         tee << log_line_str << std::endl;
         last_log_time = now;
         particle_to_log = (particle_to_log + 1) % num_particles_;
@@ -685,6 +689,11 @@ public:
   Particle * pars[kMaxParticles];  // par[ticle]s
   int num_particles = 0;
 
+  volatile bool screen_draw_event_occurred = true;
+  // Only used for logging.
+  volatile int num_drawing_event_already  = 0; // Drawing event already occurred, no need to wait.
+  volatile int num_wait_for_drawing_event = 0;
+
   explicit Particles(int numParticles) : num_particles(numParticles) {
     if (num_particles == 0) return;
     num_particles_ = num_particles;
@@ -751,7 +760,7 @@ public:
       p->p_energy_cycle_index = (p->p_energy_cycle_index + 1) % kPFrequencySubDivisions;
       p->p_energy_many_index  = (p->p_energy_many_index  + 1) % (kPFrequencySubDivisions * kPFrequencySubDivisions);
       p->total_kinetic_energy = total_kinetic_energy;
-      p->LogLess();
+      p->LogStuff(&num_drawing_event_already, &num_wait_for_drawing_event);
     }
     count++;
   }
@@ -805,12 +814,12 @@ public:
     // Things were too slow, so this looping was a method of increasing speed, by not waiting
     // on screen refresh.
     // If CPU is pegged then that means we are taking too long to draw a frame.
-    const int kMaxTimesToGetSignificantMovement = (4096 * 2) / num_particles;
+    const int kMaxTimesToGetSignificantMovement = (4096 * 4) / num_particles;
     double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change_per_particle[j] = 0;
     }
-    for (int i = 0; i < kMaxTimesToGetSignificantMovement; ++i) {
+    for (int i=0; i<kMaxTimesToGetSignificantMovement && !screen_draw_event_occurred; ++i) {
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         CalcForcesOnParticle(part_ptr);

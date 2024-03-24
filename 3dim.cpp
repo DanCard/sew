@@ -1,3 +1,4 @@
+#include <condition_variable>
 #include <Corrade/Containers/Optional.h>
 #include <Corrade/Containers/GrowableArray.h>
 #include <Corrade/Containers/Pointer.h>
@@ -9,10 +10,10 @@
 #include <Magnum/Math/Color.h>
 #include <Magnum/MeshTools/Compile.h>
 #include <Magnum/Platform/Sdl2Application.h>
-#include <Magnum/Primitives/Cube.h>
 #include <Magnum/Primitives/Icosphere.h>
 #include <Magnum/Shaders/PhongGL.h>
 #include <Magnum/Trade/MeshData.h>
+#include <mutex>
 #include <thread>
 
 #include "arcball/ArcBall.h"
@@ -37,43 +38,59 @@ struct SphereInstanceData {
 
 // Contains logic to display the simulation.
 class ThreeDim: public Platform::Application {
-    public:
-    __attribute__((unused)) explicit
-    ThreeDim(const Arguments& arguments);
+public:
+  __attribute__((unused)) explicit
+  ThreeDim(const Arguments& arguments);
+  // Destructor
+  ~ThreeDim() {
+    move_particles_thread_run = false;
+    NotifyDrawEvent();  // Inform thread to stop waiting on draw event.
+    // std::cout << "\t Requesting moveParticles() thread to terminate." << std::endl;
 
-    protected:
-        Particles atom = Particles(0);  // Stupid initialization because of compiler error.
-        UnsignedInt numSpheres;  // Number of subatomic particles to simulate in the atom.
-        void viewportEvent(ViewportEvent& event) override;      // Handle window resize
-        void keyPressEvent(KeyEvent& event) override;
-        void drawEvent() override;                              // Called every frame
-        void mousePressEvent(MouseEvent& event) override;
-        void mouseReleaseEvent(MouseEvent& event) override;
-        void mouseMoveEvent(MouseMoveEvent& event) override;
-        void mouseScrollEvent(MouseScrollEvent& event) override;
+    // Give time for thread to finish.
+    // std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    moveParticlesThread.join();
+  }
 
-        void moveParticles();
-        void drawSpheres();
 
-        Containers::Optional<ArcBall> _arcballCamera;
-        Matrix4 _projectionMatrix;
+protected:
+  Particles atom = Particles(0);  // Stupid initialization because of compiler error.
+  UnsignedInt numSpheres;  // Number of subatomic particles to simulate in the atom.
+  void viewportEvent(ViewportEvent& event) override;      // Handle window resize
+  void keyPressEvent(KeyEvent& event) override;
+  void drawEvent() override;                              // Called every frame
+  void mousePressEvent(MouseEvent& event) override;
+  void mouseReleaseEvent(MouseEvent& event) override;
+  void mouseMoveEvent(MouseMoveEvent& event) override;
+  void mouseScrollEvent(MouseScrollEvent& event) override;
 
-        /* Points data as spheres with size */
-        Containers::Array<Vector3> _spherePositions;
-        Containers::Array<Vector3> _sphereVelocities;
-        Float _sphereRadius, _sphereVelocity;
-        bool _animation = true;
+  void moveParticles();
+  void drawSpheres();
 
-        /* Profiling */
-        DebugTools::FrameProfilerGL _profiler{
-            DebugTools::FrameProfilerGL::Value::FrameTime|
-            DebugTools::FrameProfilerGL::Value::CpuDuration, 180};
+  Containers::Optional<ArcBall> _arcballCamera;
+  Matrix4 _projectionMatrix;
 
-        /* Spheres rendering */
-        GL::Mesh _sphereMesh{NoCreate};
-        GL::Buffer _sphereInstanceBuffer{NoCreate};
-        Shaders::PhongGL _sphereShader{NoCreate};
-        Containers::Array<SphereInstanceData> _sphereInstanceData;
+  /* Points data as spheres with size */
+  Containers::Array<Vector3> _spherePositions;
+  Containers::Array<Vector3> _sphereVelocities;
+  Float _sphereRadius, _sphereVelocity;
+  bool _animation = true;
+
+  /* Profiling */
+  DebugTools::FrameProfilerGL _profiler{
+      DebugTools::FrameProfilerGL::Value::FrameTime|
+      DebugTools::FrameProfilerGL::Value::CpuDuration, 180};
+
+  /* Spheres rendering */
+  GL::Mesh _sphereMesh{NoCreate};
+  GL::Buffer _sphereInstanceBuffer{NoCreate};
+  Shaders::PhongGL _sphereShader{NoCreate};
+  Containers::Array<SphereInstanceData> _sphereInstanceData;
+
+private:
+  std::thread moveParticlesThread;
+  volatile bool move_particles_thread_run = true;
+  void NotifyDrawEvent();
 };
 
 using namespace Math::Literals;
@@ -192,27 +209,52 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   }
 
   // Start thread to move particles.
-  // std::thread t1(&Particles::moveParticles, &atom);
+  moveParticlesThread = std::thread(&ThreeDim::moveParticles, this);
+  // moveParticlesThread.detach(); // Avoids terminal error: terminate called without an active exception
 }
 
+std::mutex mutually_exclusive_lock;
+std::condition_variable condition_var;
 
 void ThreeDim::moveParticles() {
-  atom.moveParticles();
-  for (int i=0; i<numSpheres; i++) {
-    for (int j=0; j<3; j++) {
-      _spherePositions[i][j] = static_cast<float>(atom.pars[i]->pos[j] / kScale);
+  bool just_waited = false;
+  while (move_particles_thread_run) {
+    while (atom.screen_draw_event_occurred && _animation) {
+      atom.screen_draw_event_occurred = false;
+      if (!just_waited)
+        atom.num_drawing_event_already += 1;
+      just_waited = false;
+      atom.moveParticles();
     }
+    atom.num_wait_for_drawing_event += 1;
+    if (atom.num_wait_for_drawing_event > 160) {
+      std::cout << " num_wait_for_drawing_event: "  << atom.num_wait_for_drawing_event
+                << " number of times not waiting: " << atom.num_drawing_event_already
+                << std::endl;
+      atom.num_wait_for_drawing_event = 0;  // Just to keep this message from not printing too often.
+    }
+    // Grab a lock and wait for the next screen draw event.
+    std::unique_lock<std::mutex> lk(mutually_exclusive_lock);
+    condition_var.wait(lk, [this]{return atom.screen_draw_event_occurred;});
+    just_waited = true;
   }
-  redraw();
+  // std::cout << "\t moveParticles() thread terminating as requested." << std::endl;
 }
 
-    // Draw event is called every frame.
+void ThreeDim::NotifyDrawEvent() {
+  atom.screen_draw_event_occurred = true;
+  std::lock_guard<std::mutex> lk(mutually_exclusive_lock);
+  condition_var.notify_one();
+}
+
+// Draw event is called every frame.
 void ThreeDim::drawEvent() {
+  NotifyDrawEvent();
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth);
   _profiler.beginFrame();
 
   if(_animation) {
-    atom.moveParticles();
+    // atom.moveParticles();
     for (int i=0; i<numSpheres; i++) {
       for (int j=0; j<3; j++) {
         _spherePositions[i][j] = static_cast<float>(atom.pars[i]->pos[j] / kScale);
