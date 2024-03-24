@@ -30,19 +30,19 @@ const double kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wi
 const double kEMassKg = 9.1093837015e-31;   // kg
 const double kPMassKg = 1.67262192369e-27;  // kg
 const double kBohrRadius = 5.29177210903e-11;  // Meters
-const double kBohrRadiusProton = kBohrRadius / 10;  // value = swag / trial and error
+const double kBohrRadiusProton = kBohrRadius / 4;  // value = swag / trial and error
                                                
 const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
 const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
-const int    kMaxParticles = 4;
-const int    kPFrequencySubDivisions = 128 * 4;
+const int    kMaxParticles = 8;
+const int    kPFrequencySubDivisions = 128;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
 const double kShortDt = 1 / ( kPFrequency * kPFrequencySubDivisions );
 // Use a long dt to make the simulation faster.
-const double kLongDt  = 10 / ( kEFrequency * kPFrequencySubDivisions );  // Seconds
+const double kLongDt  = 1 / ( kEFrequency * kPFrequencySubDivisions );  // Seconds
 // We change the simulation style when particle gets near the speed of light.
 // Instead of using dt, we just simulate the trajectory of the particle.
 // Needed because simulation creates huge errors when there are huge forces.
@@ -142,7 +142,7 @@ public:
   // Fast fraction informs were we are in the dt range between long and short.
   double fast_fraction = 0;  // Percent we are between long dt and short dt.
   bool   is_force_too_high = false;
-  unsigned char color[3] = {128 + 64, 128 + 64, 128 + 64}; // Only used for coloring console output.
+  unsigned char color[3];
   double total_kinetic_energy = 0;
 
   double fv_dot_product;  // Force velocity dot product
@@ -206,7 +206,7 @@ public:
     return std::abs(d3[0] / d3[i]) < 10;
   }
 
-  static std::string Log3dArray(double *d3, const std::string &name, int width = 9) {
+  static std::string Log3dArray(double *d3, const std::string &name, int width = 6) {
     std::ostringstream log_line;
     // Set precision based on width.  If width is 6, then precision is 0.
     // If width is 8, then precision is 1.  Cause 1 space for the decimal point.
@@ -219,10 +219,7 @@ public:
     if (IsSignificantParameter(d3, 1)) log_line << " y " << std::setw(width) << d3[1];
     else                               log_line << "   " << std::setw(width) << " ";
     if (IsSignificantParameter(d3, 2)) log_line << " z " << std::setw(width) << d3[2];
-    /*
-    else if (d3[0] == 0 && d3[1] == 0 && d3[2] == 0)
-                                       log_line << " 0 " << std::setw(width) << " ";
-    */
+    else                               log_line << "   " << std::setw(width) << " ";
     return log_line.str();
   }
 
@@ -317,12 +314,11 @@ public:
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
    // << Log3dArray(pos_change_3d, "chng") << std::setprecision(1)
    // << Log3dArray(pos     , "pos")
-   // << "  dt"   << std::setw( 9) << dt // << " new " << new_dt
-   // << " fast"  << std::setprecision(3)   << std::setw(10) << fast_fraction
-      << std::setprecision(1)
    // << " min pos change " << min_pos_change_desired
-      << std::fixed << std::setw( 6)
-      << round(fast_fraction * 10) * 10 << '%'
+      << "  dt"   << std::setw( 9) << dt // << " new " << new_dt
+      << " fast"  << std::setprecision(3)   << std::setw(10) << fast_fraction
+      << std::setprecision(1) << std::fixed << std::setw( 6)
+   // << round(fast_fraction * 10) * 10 << '%'
       << " chrg"  << std::setw( 4) << int(round((freq_charge/avg_q)*100)) << '%'
       << " oth"   << std::setw( 4) << int(round((oth_charge / p_exerting_largest_force->q_amplitude) * 100)) << '%'
    // << " inv"   << std::setw(12) << inverse_exponential
@@ -339,26 +335,22 @@ public:
   void LogLess() {  // Log less stuff.
     CalcAveragePotentialEnergy();
 
-    bool logged = false;
-    std::string log_line_str;
-    static int particle_to_log = 0;
-    if (particle_to_log == id || log_count > 0) {      // Log based on time interval to console.
-      auto now = std::chrono::system_clock::now();
+    static int particle_to_log = 0;                // Log one of our standing EM waves at a time.
+    if (particle_to_log == id || log_count > 0) {  // Log based on time interval to console.
+      auto now = std::chrono::system_clock::now(); // Get current time and see if we logged more than xxx milliseconds ago.
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
-      if (log_count > 0 || duration.count() > 800) {
+      if (log_count > 0 || duration.count() > 1000) {
         SetColorForConsole();
-        log_line_str = FormatLogLine();
+        std::string log_line_str = FormatLogLine();
         tee << log_line_str << std::endl;
         last_log_time = now;
-        logged = true;
         particle_to_log = (particle_to_log + 1) % num_particles_;
         log_count--;
         logToBuffer(log_line_str);
+        return;
       }
     }
-    if (!logged) {
-      ConsiderLoggingToFile();
-    }
+    ConsiderLoggingToFile();  // Didn't log to screen and file based on time so consider logging to just file.
   }
 
 
@@ -391,10 +383,10 @@ public:
   double GetSinusoidalChargeValue() const {
     // if dt > 0.25 / frequency, then charge is constant.
     // Can't simulate sinusoidal charge when dt is large.
+    /*
     if (dt > (0.25/frequency)) {
       return avg_q;
     }
-    /*
     if (!is_electron) {
       return avg_q;
     }
@@ -570,14 +562,17 @@ public:
     return 1;
   }
 
-  // When forces are very high we should slow down delta time (dt)
+  // When forces are very high we should slow down delta time (dt) to make calculations more accurate.
   double CalcNewDt(double * fast_fraction_ptr) {
-    const double safe_distance = 4e-12;
+    // Simulation will slow down alot below this distance.  Will make simulation more accurate.
+    const double kSmallDtDistance = kCloseToTrouble * 2;
+    // Simulation will slow down when particles are closer than this.  Will make simulation more accurate.
+    const double safe_distance = kBohrRadius;
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
     // fast_fraction < 0 when distance shorter than kCloseToTrouble.
     // fast_fraction > 1 when distance is further than (kBohrRadius / 8).
-    fast_fraction = (dist_mag_from_largest - kCloseToTrouble) / (safe_distance - kCloseToTrouble);
+    fast_fraction = (dist_mag_from_largest - kSmallDtDistance) / (safe_distance - kSmallDtDistance);
     if (fast_fraction > 1) {
       fast_fraction = 1;
       return kLongDt;
@@ -700,30 +695,38 @@ public:
 
     assert(numParticles <= kMaxParticles);
     for (int i = 0; i < numParticles; ++i) {
-      if (i < numParticles/2) {
+      Particle* p;
+      if (i < numParticles / 2) {
         pars[i] = new Electron(i);
+        p = pars[i];
+        // Set pseudo random colors.  Electrons tend to be more red.  Protons tend to be more blue.
+        // Prefer bright colors over dark colors.
+        p->color[0] = 150 + (std::rand() % 105);
+        p->color[1] =  64 + (std::rand() % 191);
+        p->color[2] =   0 + (std::rand() % 210);
       } else {
         pars[i] = new Proton(i);
+        p = pars[i];
+        p->color[0] =   0 + (std::rand() % 210);
+        p->color[1] =   0 + (std::rand() % 255);
+        p->color[2] = 150 + (std::rand() % 105);
       }
-      /* Set up:
-          Want to have one electron with charge 0 all the way to the left.
-          Two protons one high and one low.
-          Electron in the middle with charge -2e.
-      */
-      if (i > 1) {
-        pars[i]->pos[1] = (kBohrRadiusProton * 0.75) * (i%2 == 0 ? 1 : -1);
+      std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
+                << " " << int(p->color[2]);
+      double max_dist = p->max_dist_allow * 0.5;
+      // Set random locations
+      for (int j = 0; j < 3; ++j) {
+        p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.5) * max_dist;
+        // Increase brightness
+        int increase = p->color[j] / 4;
+        if (p->color[j] + increase > 255) p->color[j]  = 255;
+        else                              p->color[j] += increase;
       }
-      std::cout << "\t\t pos " << pars[i]->pos[0] << " " << pars[i]->pos[1] << " " << pars[i]->pos[2]
-                << std::endl;
+      std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
+                << " " << int(p->color[2]) << std::endl;
+      std::cout << "\t\t pos " << p->pos[0] << " " << p->pos[1] << " " << p->pos[2] << std::endl;
     }
-    pars[0]->pos[0] = -kBohrRadius * 0.25;
-    pars[1]->pos[0] =  kBohrRadius * 0.1;
-    pars[0]->color[0] = 255;
-    pars[1]->color[0] = 235;
-    pars[1]->color[1] = 128 + 64 + 32;  // 224
-    pars[2]->color[2] = 255;
-    pars[3]->color[2] = 235;
-    pars[3]->color[1] = 128 + 64 + 32;
+    // if (num_particles > 5) pars[5]->color[2] = 255;   // Try to make color less dark.
   }
 
   void CalcEnergyAndLog() {
@@ -802,7 +805,7 @@ public:
     // Things were too slow, so this looping was a method of increasing speed, by not waiting
     // on screen refresh.
     // If CPU is pegged then that means we are taking too long to draw a frame.
-    const int kMaxTimesToGetSignificantMovement = 4096 * 4;
+    const int kMaxTimesToGetSignificantMovement = 4096;
     double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change_per_particle[j] = 0;
@@ -833,7 +836,6 @@ public:
     // if (pos_change < min_pos_change_desired) tee << std::endl;
     // tee << "  pos: " << pos << std::endl;
   }
-
 };
 
 } // namespace

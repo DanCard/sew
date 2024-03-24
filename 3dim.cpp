@@ -80,7 +80,7 @@ using namespace Math::Literals;
 
 ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments, NoCreate} {
   Utility::Arguments args;
-  args.addOption('s', "spheres", "4")
+  args.addOption('s', "spheres", "6")
           .setHelp("spheres", "number of spheres to simulate", "N")
       .addOption('r', "sphere-radius", "0.025")
           .setHelp("sphere-radius", "sphere radius", "R")
@@ -145,14 +145,26 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       static_cast<float>(atom.pars[0]->pos[0] / kScale),
       static_cast<float>(atom.pars[0]->pos[1] / kScale),
       static_cast<float>(atom.pars[0]->pos[2] / kScale)};
+  for (int i=0; i<numSpheres; i++) {
+    Particle *p = atom.pars[i];
+    _sphereInstanceData[i].color = Color4{(float)p->color[0]/255,
+                                          (float)p->color[1]/255,
+                                          (float)p->color[2]/255,
+                                           0.5f};
+    for (int j=0; j<3; j++) {
+      _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
+    }
+  }
   std::cout << "\t sphere pos: " << _spherePositions[0][0]
               << " electron pos: " << atom.pars[0]->pos[0]
               << std::endl;
-  _spherePositions[1] = Vector3{0.0f};
+  // _spherePositions[1] = Vector3{0.0f};
+  /*
   _sphereInstanceData[0].color = Color4{1.0F, 0.0f, 0.0f, 0.5f};
   _sphereInstanceData[1].color = Color4{0.8f, 0.3f, 0.0f, 0.5f};
   _sphereInstanceData[2].color = Color4{0.0f, 0.0f, 1.0f, 0.5f};
   _sphereInstanceData[3].color = Color4{0.0f, 0.3f, 0.8f, 0.5f};
+  */
   {        // Rendering spheres / particles.
       for(std::size_t i = 0; i < numSpheres; ++i) {
           /* Fill in the instance data. Most of these stays the same, except
