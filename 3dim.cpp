@@ -13,13 +13,13 @@
 #include <Magnum/Primitives/Icosphere.h>
 #include <Magnum/Shaders/PhongGL.h>
 #include <Magnum/Trade/MeshData.h>
+#include <thread>
 
 #include "arcball/ArcBall.h"
 #include "particles.cpp"
 
 namespace Magnum { namespace Examples {
 
-const bool useStandingEMWave = true;
 // Scale changes a particles position in the simulation to the
 // particles position in the magnum library.
 // VTK has bugs with small scale.  Use scale factor to overcome issues.
@@ -80,7 +80,7 @@ using namespace Math::Literals;
 
 ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments, NoCreate} {
   Utility::Arguments args;
-  args.addOption('s', "spheres", "6")
+  args.addOption('s', "spheres", "4")
           .setHelp("spheres", "number of spheres to simulate", "N")
       .addOption('r', "sphere-radius", "0.025")
           .setHelp("sphere-radius", "sphere radius", "R")
@@ -190,6 +190,20 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
           Shaders::PhongGL::Color4{});      // Should that be Color4?
       _sphereMesh.setInstanceCount(_sphereInstanceData.size());
   }
+
+  // Start thread to move particles.
+  // std::thread t1(&Particles::moveParticles, &atom);
+}
+
+
+void ThreeDim::moveParticles() {
+  atom.moveParticles();
+  for (int i=0; i<numSpheres; i++) {
+    for (int j=0; j<3; j++) {
+      _spherePositions[i][j] = static_cast<float>(atom.pars[i]->pos[j] / kScale);
+    }
+  }
+  redraw();
 }
 
     // Draw event is called every frame.
@@ -198,15 +212,11 @@ void ThreeDim::drawEvent() {
   _profiler.beginFrame();
 
   if(_animation) {
-    if (useStandingEMWave) {
-      atom.moveParticles();
-      for (int i=0; i<numSpheres; i++) {
-        for (int j=0; j<3; j++) {
-          _spherePositions[i][j] = static_cast<float>(atom.pars[i]->pos[j] / kScale);
-        }
+    atom.moveParticles();
+    for (int i=0; i<numSpheres; i++) {
+      for (int j=0; j<3; j++) {
+        _spherePositions[i][j] = static_cast<float>(atom.pars[i]->pos[j] / kScale);
       }
-    } else {
-        moveParticles();
     }
   }
 
@@ -222,21 +232,6 @@ void ThreeDim::drawEvent() {
 
   /* If the camera is moving or the animation is running, redraw immediately */
   if(moving || _animation) redraw();
-}
-
-void ThreeDim::moveParticles() {
-    constexpr Float dt = 1.0f/120.0f;
-
-    for(std::size_t i = 0; i < _spherePositions.size(); ++i) {
-        Vector3 pos = _spherePositions[i] + _sphereVelocities[i] * dt;
-        for(std::size_t j = 0; j < 3; ++j) {
-            if(pos[j] < -1.0f || pos[j] > 1.0f)
-                _sphereVelocities[i][j] = -_sphereVelocities[i][j];
-            pos[j] = Math::clamp(pos[j], -1.0f, 1.0f);
-        }
-
-        _spherePositions[i] = pos;
-    }
 }
 
 void ThreeDim::drawSpheres() {

@@ -805,7 +805,7 @@ public:
     // Things were too slow, so this looping was a method of increasing speed, by not waiting
     // on screen refresh.
     // If CPU is pegged then that means we are taking too long to draw a frame.
-    const int kMaxTimesToGetSignificantMovement = 4096;
+    const int kMaxTimesToGetSignificantMovement = (4096 * 2) / num_particles;
     double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change_per_particle[j] = 0;
