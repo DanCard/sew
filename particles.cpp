@@ -97,7 +97,8 @@ public:
   double pos_change_3d[3];     // Change in position.
   double pos_change_magnitude;
 
-  double dist_mag[kMaxParticles];
+  double dist_mag [kMaxParticles];
+  double dist_mag2[kMaxParticles];
   double dist_from_largest[3]; // Distance from particle exerting largest force.
   double distance_mag_from_origin = 0;
   double dist_mag_from_largest;
@@ -479,9 +480,7 @@ public:
     }
   }
 
-
-  void CalcForcesFromParticle(Particle* oth /* other particle */) {
-    int oth_id = oth->id;
+  void CheckForEscape() {
     distance_mag_from_origin = sqrt(pow(pos[0], 2) + pow(pos[1], 2) + pow(pos[2], 2));
     // If particle escapes, then zero out the velocity.
     // This is a hack to limit the problem of energy gain.
@@ -489,13 +488,24 @@ public:
     if (distance_mag_from_origin > max_dist_allow) {
       HandleEscape();
     }
+  }
+
+  void CalcForcesFromParticle(Particle* oth /* other particle */) {
+    int oth_id = oth->id;
     double dist[3];
     for (int i = 0; i < 3; ++i) {
       dist[i] = pos[i] - oth->pos[i];
     }
-    double dist_mag2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
-    double dist_magn = sqrt(dist_mag2);
-    dist_mag[oth_id] = dist_magn;
+    double dist_magn;
+    double dist_magn2;
+    if (oth_id > id) {  // If calcs already done.
+      dist_magn  = oth->dist_mag [id];
+      dist_magn2 = oth->dist_mag2[id];
+    } else {
+      dist_magn2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
+      dist_magn  = sqrt(dist_magn2);
+      dist_mag[oth_id] = dist_magn;
+    }
     double dist_unit_vector[3];
     for (int i = 0; i < 3; ++i) {
       dist_unit_vector[i] = dist[i] / dist_magn;
@@ -506,9 +516,9 @@ public:
     bool forces_attract = (freq_charge * other_charge) <= 0;
     double force[3];
     // When opposite charges, force1 is negative.  When same charges, force1 is positive.
-    double eforce_magnitude = kCoulomb * freq_charge * other_charge / dist_mag2;
+    double eforce_magnitude = kCoulomb * freq_charge * other_charge / dist_magn2;
     double magnet_f[3];     // Magnetic force1.
-    CalculateMagneticForce(magnet_f, oth, freq_charge, other_charge, dist, dist_mag2);
+    CalculateMagneticForce(magnet_f, oth, freq_charge, other_charge, dist, dist_magn2);
     for (int i = 0; i < 3; ++i) {
       force[i] = (eforce_magnitude * dist_unit_vector[i]) + magnet_f[i];
       forces[i] += force[i];  // main return values used.
@@ -805,21 +815,36 @@ public:
     return min_pos_change_desired;
   }
 
+
+  // How to decide if movement is too much?  Just guess?
+  // double CalcMinPosChangeDesired() {
+  // }
+
   // Called once for every screen draw.
   void moveParticles() {
     // Loop without waiting on screen refresh to make simulation run faster.
     double min_pos_change_desired = CalcMinPosChangeDesired();
+    // Lets not move faster than it would take an electron to go from center to edge,
+    // faster than two seconds.
+    const double max_pos_change_desired = kBohrRadius / (60*2);  // 60 fps
 
-    // I kept raising this value until a cpu core was at 100% usage.  Then I cut it in half.
-    // Things were too slow, so this looping was a method of increasing speed, by not waiting
-    // on screen refresh.
-    // If CPU is pegged then that means we are taking too long to draw a frame.
-    const int kMaxTimesToGetSignificantMovement = (4096 * 4) / num_particles;
+    // Below may not be needed after threading and draw state variables added.
+    // const int kMaxTimesToGetSignificantMovement = (4096 * 4) / num_particles;
     double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change_per_particle[j] = 0;
     }
-    for (int i=0; i<kMaxTimesToGetSignificantMovement && !screen_draw_event_occurred; ++i) {
+    for (int i=0; i<num_particles; ++i) {
+      // Only check for escape once per significant movement to save on CPU.
+      pars[i]->CheckForEscape();
+    }
+    // for (int i=0; i<kMaxTimesToGetSignificantMovement && !screen_draw_event_occurred; ++i) {
+    bool exit_loop = false;
+    do {   // Do until we get significant movement, then wait for screen draw.
+           // Really wait for screen draw?  Maybe more movement is better?
+           // We shouldn't be waiting on significant movement.
+           // Should wait for good amount of movement.
+           // Or wait for movement would be to fast if distance is too big.
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         CalcForcesOnParticle(part_ptr);
@@ -836,14 +861,12 @@ public:
       CalcEnergyAndLog();
       time_ += dt;
       for (int j = 0; j < num_particles; ++j) {
-        if (pos_change_per_particle[j] > min_pos_change_desired) {
-          goto exit_loop;
+        if (pos_change_per_particle[j] > max_pos_change_desired) {
+          exit_loop = true;
         }
       }
-    }
-    exit_loop:
-    // if (pos_change < min_pos_change_desired) tee << std::endl;
-    // tee << "  pos: " << pos << std::endl;
+      // If screen_draw_event_occurred then we are over our computation budget.
+    } while (!exit_loop && !screen_draw_event_occurred);
   }
 };
 

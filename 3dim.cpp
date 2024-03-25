@@ -44,11 +44,10 @@ public:
   // Destructor
   ~ThreeDim() {
     move_particles_thread_run = false;
+    _animation = false;
     NotifyDrawEvent();  // Inform thread to stop waiting on draw event.
     // std::cout << "\t Requesting moveParticles() thread to terminate." << std::endl;
 
-    // Give time for thread to finish.
-    // std::this_thread::sleep_for(std::chrono::milliseconds(10));
     moveParticlesThread.join();
   }
 
@@ -221,22 +220,19 @@ void ThreeDim::moveParticles() {
   while (move_particles_thread_run) {
     while (atom.screen_draw_event_occurred && _animation) {
       atom.screen_draw_event_occurred = false;
-      if (!just_waited)
-        atom.num_drawing_event_already += 1;
-      just_waited = false;
+      if (!just_waited)                       // Only used for logging.
+        atom.num_drawing_event_already += 1;  // Only used for logging.
+      just_waited = false;                    // Only used for logging.
+
       atom.moveParticles();
     }
-    atom.num_wait_for_drawing_event += 1;
-    if (atom.num_wait_for_drawing_event > 160) {
-      std::cout << " num_wait_for_drawing_event: "  << atom.num_wait_for_drawing_event
-                << " number of times not waiting: " << atom.num_drawing_event_already
-                << std::endl;
-      atom.num_wait_for_drawing_event = 0;  // Just to keep this message from not printing too often.
+    atom.num_wait_for_drawing_event += 1;     // Only used for logging.
+    just_waited = true;                       // Only used for logging.
+    {
+      // Grab a lock and wait for the next screen draw event.
+      std::unique_lock<std::mutex> lk(mutually_exclusive_lock);
+      condition_var.wait(lk, [this]{return atom.screen_draw_event_occurred;});
     }
-    // Grab a lock and wait for the next screen draw event.
-    std::unique_lock<std::mutex> lk(mutually_exclusive_lock);
-    condition_var.wait(lk, [this]{return atom.screen_draw_event_occurred;});
-    just_waited = true;
   }
   // std::cout << "\t moveParticles() thread terminating as requested." << std::endl;
 }
