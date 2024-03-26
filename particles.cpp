@@ -29,7 +29,7 @@ const double kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wi
 const double kEMassKg = 9.1093837015e-31;   // kg
 const double kPMassKg = 1.67262192369e-27;  // kg
 const double kBohrRadius = 5.29177210903e-11;  // Meters
-const double kBohrRadiusProton = kBohrRadius / 4;  // value = swag / trial and error
+const double kBohrRadiusProton = kBohrRadius / 3;  // value = swag / trial and error
                                                
 const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
 const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
@@ -262,7 +262,7 @@ public:
     bool particles_are_close_very = dist_mag_closest < kCloseToTrouble;
     bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1) &&
             (prev_fast_fraction - fast_fraction > 0.1);
-    const int ll = 1;  // Limit logging to once every x lines.
+    const int ll = 256;  // Limit logging to once every x lines.
     if (log_count > 0 // || true
       ||  count%(ll*32) == 0
       || (count%(ll*16) == 0 && fast_fraction < 0.1)
@@ -748,7 +748,7 @@ public:
       double max_dist = p->max_dist_allow * 0.5;
       // Set random locations
       for (int j = 0; j < 3; ++j) {
-        p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.75) * max_dist;
+        p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.9) * kBohrRadiusProton;
         // Increase brightness
         int increase = p->color[j] / 4;
         if (p->color[j] + increase > 255) p->color[j]  = 255;
@@ -804,7 +804,8 @@ public:
         assert(w1->dist_mag[j] != 0);
         potential_energy_all_w += kCoulomb * w1->freq_charge * w2->freq_charge / w1->dist_mag[j];
       }
-      if (w1->is_electron && w1->dist_mag_closest < kCloseToTrouble*8
+      // If the electron is interesting because it is close to a proton than give it preferential logging.
+      if (w1->is_electron && w1->dist_mag_closest < kCloseToTrouble*4
        && w1->dist_mag_closest < closest) {
         closest = w1->dist_mag_closest;
         w_to_log_id = w1->id;
@@ -851,7 +852,7 @@ public:
     // for (int i=0; i<kMaxTimesToGetSignificantMovement && !screen_draw_event_occurred; ++i) {
     bool exit_loop = false;
     // Do until we get significant movement, then wait for screen draw.
-    for (int loop = 0; loop<4096 && !exit_loop && !screen_draw_event_occurred; ++loop) {
+    for (int loop = 0; loop<(4096*2) && !exit_loop && !screen_draw_event_occurred; ++loop) {
       for (int i = 0; i < num_particles; ++i) {
         Particle * wave_ptr = pars[i];
         wave_ptr->freq_charge = wave_ptr->GetSinusoidalChargeValue();

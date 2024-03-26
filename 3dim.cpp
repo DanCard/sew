@@ -170,30 +170,15 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
+    auto sphere_radius = (p->is_electron ? 1 : 1.5) * _sphereRadius;
+    _sphereInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[i]) *
+                                                  Matrix4::scaling(Vector3{sphere_radius}) * 3;
+    _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();
   }
   std::cout << "\t sphere pos: " << _spherePositions[0][0]
               << " electron pos: " << atom.pars[0]->pos[0]
               << std::endl;
-  // _spherePositions[1] = Vector3{0.0f};
-  /*
-  _sphereInstanceData[0].color = Color4{1.0F, 0.0f, 0.0f, 0.5f};
-  _sphereInstanceData[1].color = Color4{0.8f, 0.3f, 0.0f, 0.5f};
-  _sphereInstanceData[2].color = Color4{0.0f, 0.0f, 1.0f, 0.5f};
-  _sphereInstanceData[3].color = Color4{0.0f, 0.3f, 0.8f, 0.5f};
-  */
   {        // Rendering spheres / particles.
-      for(std::size_t i = 0; i < numSpheres; ++i) {
-          /* Fill in the instance data. Most of these stays the same, except
-              for the translation */
-          // If we don't multiply by the _sphereRadius, the spheres will be too big.
-          // No idea why.
-          _sphereInstanceData[i].transformationMatrix =
-              Matrix4::translation(_spherePositions[i]) *
-              Matrix4::scaling(Vector3{_sphereRadius}) * 3;
-          _sphereInstanceData[i].normalMatrix =
-              _sphereInstanceData[i].transformationMatrix.normalMatrix();
-      }
-
       _sphereShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}
           .setFlags(Shaders::PhongGL::Flag::VertexColor|
                       Shaders::PhongGL::Flag::InstancedTransformation)};
