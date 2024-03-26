@@ -36,7 +36,7 @@ const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wik
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 8;
-const int    kPFrequencySubDivisions = 128 * 2;
+const int    kPFrequencySubDivisions = 128;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
 const double kShortDt = 1 / ( kPFrequency * kPFrequencySubDivisions );
@@ -335,39 +335,6 @@ public:
     return log_line.str();
   }
 
-/*
-  void LogStuff(volatile int *num_drawing_event_already,
-                volatile int *num_wait_for_drawing_event) {
-    CalcAveragePotentialEnergy();
-    bool moving_fast = vel_mag > kMaxSpeedElectron / 4;
-    static int particle_to_log = 0;                // Log one of our standing EM waves at a time.
-    // Log based on time interval to console.
-    if (particle_to_log == id
-     || log_count > 0
-     || // Or there is an electron close to a proton.  In other words very strong forces exerted.
-        moving_fast
-     ) {
-      auto now = std::chrono::system_clock::now(); // Get current time and see if we logged more than xxx milliseconds ago.
-      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
-      if (log_count > 0 || duration.count() > 800) {
-        SetColorForConsole();
-        std::string log_line_str = FormatLogLine()
-          + " L " + std::to_string(*num_drawing_event_already)    // Late.  Drawing event already occurred.
-          + " E " + std::to_string(*num_wait_for_drawing_event);  // Calcs were early.  Waited on drawing event.
-        *num_drawing_event_already = 0;
-        *num_wait_for_drawing_event     = 0;
-        tee << log_line_str << std::endl;
-        last_log_time = now;
-        particle_to_log = (particle_to_log + 1) % num_particles_;
-        log_count--;
-        logToBuffer(log_line_str);
-        return;
-      }
-    }
-    ConsiderLoggingToFile();  // Didn't log to screen and file based on time so consider logging to just file.
-  }
-*/
-
 
   void HandleEscape() {
     log_prev_log_lines();
@@ -552,60 +519,6 @@ public:
   }
 
 
-  void CalcForcesFromParticle2(Particle* oth /* other particle */) {
-    int oth_id = oth->id;
-    if (oth_id == id) return;
-    double dist[3];
-    for (int i = 0; i < 3; ++i) {
-      dist[i] = pos[i] - oth->pos[i];
-    }
-    double dist_magn;
-    double dist_magn2;
-    // If we have already done the calcs, then use the cached values in the other standing wave.
-    if (oth->dist_calcs_done[oth_id]) {
-      dist_magn  = oth->dist_mag [id];
-      dist_magn2 = oth->dist_mag2[id];
-    } else {
-      dist_magn2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
-      dist_magn  = sqrt(dist_magn2);
-      dist_mag [oth_id] = dist_magn;  // Alternatively could just set dist_mag for other rather than mess with arrays,
-      dist_mag2[oth_id] = dist_magn2; // but that may have concurrency issue(s).
-      dist_calcs_done[oth_id] = true;
-    }
-    assert(dist_magn  > 0);  // Since we can't handle infinite forces, lets assume this is always true.
-    assert(dist_magn2 > 0);  // Since we can't handle infinite forces, lets assume this is always true.
-
-    double dist_unit_vector[3];
-    for (int i = 0; i < 3; ++i) {
-      dist_unit_vector[i] = dist[i] / dist_magn;
-    }
-    // Current charge varies based on frequency and time.
-    double other_charge = oth->freq_charge;
-    bool forces_attract = (freq_charge * other_charge) <= 0;
-    // When opposite charges, force1 is negative.  When same charges, force1 is positive.
-    double eforce_magnitude = kCoulomb * freq_charge * other_charge / dist_magn2;
-    // Possible optimization is to calculate magnetic force in separate thread.
-    // Another possibility is to skip it or use cached values,
-    // it doesn't change significantly, since it is negligible / insignificant.
-    double magnet_f[3];     // Magnetic force.
-    CalcMagneticForce(magnet_f, oth, freq_charge, other_charge, dist, dist_magn2);
-    for (int i = 0; i < 3; ++i) {
-      forces[i] += (eforce_magnitude * dist_unit_vector[i]) + magnet_f[i];
-    }
-    // Determine which attractive particle we are closest to.
-    // This is often the particle exerting the largest force.
-    if (dist_magn < dist_mag_closest && forces_attract) {
-      p_closest_attracted    = oth;
-      p_closest_attracted_id = oth_id;
-      dist_mag_closest = dist_magn;
-      for (int i = 0; i < 3; ++i) {
-        dist_closest[i] = dist[i];
-      }
-      force_mag_closest = force_magnitude;
-    }
-  }
-
-
   // Is there a formula equivalent to below?
   static double dummiesInverseExponential(double fast_fraction) {
     // Slow = how close to short dt.
@@ -662,7 +575,15 @@ public:
     } else if (inverse_exponential < 0) {
       inverse_exponential = 0;
     }
-    return kLongDt + ((kShortDt - kLongDt) * inverse_exponential);
+    double new_dt = kLongDt + ((kShortDt - kLongDt) * inverse_exponential);
+    // Trouble with energy gain.  Too compensate lower simulation speed, increase accuracy
+    // when leaving close proton.  Decrease dt so that we can lower speed as much as was gained coming
+    // in.  Hack to limit problem of energy gain.
+    if (dist_mag_closest < (kSmallDtDistance*8) && dis_vel_dot_prod >= 0) {
+      new_dt = new_dt / 2;
+      //std::cout << "  Lowering dt to " << new_dt << "  dist " << dist_mag_closest << std::endl;
+    }
+    return new_dt;
   }
 
   // With little or no space between particles, forces approach infinity.
@@ -720,7 +641,6 @@ public:
     }
     vel_mag2 = pow(vel[0], 2) + pow(vel[1], 2) + pow(vel[2], 2);
     vel_mag  = sqrt(vel_mag2);
-    new_dt = CalcNewDt(&fast_fraction);
     for (int i = 0; i < 3; ++i) {
       pos_change_3d[i]  = vel[i] * dt;
       pos          [i] += pos_change_3d[i];
@@ -735,7 +655,9 @@ public:
     // if coming or going relative to closest attracting particle.
     // If the vectors are pointing in the same direction (aligned), their dot product is 1.
     // If they are perpendicular, it's 0. If they are pointing in opposite directions, it's -1.
+    new_dt = CalcNewDt(&fast_fraction);
 
+    // pos_change_magnitude used to decide if we have moved enough for current frame.
     pos_change_magnitude = sqrt(pow(pos_change_3d[0], 2) + pow(pos_change_3d[1], 2) + pow(pos_change_3d[2], 2));
     // When particles are on top of each other forces approach infinity.
     // To get around that problem we teleport to other side of particle.
