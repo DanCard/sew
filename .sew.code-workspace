@@ -81,6 +81,7 @@
       "variant": "cpp",
       "format": "cpp",
       "__nullptr": "cpp"
-    }
+    },
+    "editor.mouseWheelZoom": true
 	}
 }

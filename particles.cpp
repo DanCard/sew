@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "tee_stream.cpp"
@@ -35,7 +36,7 @@ const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wik
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 8;
-const int    kPFrequencySubDivisions = 128;
+const int    kPFrequencySubDivisions = 128 * 2;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
 const double kShortDt = 1 / ( kPFrequency * kPFrequencySubDivisions );
@@ -97,21 +98,28 @@ public:
   double pos_change_3d[3];     // Change in position.
   double pos_change_magnitude;
 
-  double dist_mag [kMaxParticles];
-  double dist_mag2[kMaxParticles];
-  double dist_from_largest[3]; // Distance from particle exerting largest force.
+  volatile double dist_mag [kMaxParticles];  // Cache distance calcs to use by other threads.
+  volatile double dist_mag2[kMaxParticles];
+  // Distance from closest attracted particle.
+  // Usually this is the distance from particle exerting largest force.
+  // Exception is when closest has zero charge.
+  double dist_closest[3];
+  double dist_mag_closest;
+  double dist_unit_vec[3];   // Unit vector from closest
   double distance_mag_from_origin = 0;
-  double dist_mag_from_largest;
+  Particle* p_closest_attracted;
+  int    p_closest_attracted_id;
 
   double forces[3];           // Sum of all forces from all particles.
-  double force_magnitude;
+  double force_magnitude;     // Sum of all forces from all particles.
+  double force_mag_closest;   // Force mag from closest attracted particle.  Only used for logging.
 
   double vel[3] = {0, 0, 0};
   double vel_mag = 0;
   double vel_mag2 = 0;        // Velocity magnitude squared.
-  double vel_uv[3];
-  // double vel_uv_old[3];
-  // double vel_dot_product;
+  double vel_unit_vec[3];
+  // Used for logging to determine of electron is coming or going relative to closest proton.
+  double dis_vel_dot_prod;
   double new_dt = 0;          // Global dt = smallest new dt.
 
   // Only used for debug.  Not used in simulation calculations.
@@ -131,21 +139,16 @@ public:
   static const int max_prev_log_lines = 8;
   std::vector<std::string> prev_log_lines = std::vector<std::string>(max_prev_log_lines);
   int    prev_log_line_index = 0;
-  double m_bg_f[3];         // Magnetic force1 from background magnetic field.
-  double mf_q2[3];          // Force from q2.
+  double magnet_forces[3];  // Sum of all magnetic forces from all particles.
   double acceleration[3];
-  double largest_force_mag;   // Largest force mag from a single particle.
-  Particle* p_exerting_largest_force;
-  int    p_exerting_largest_force_id;
   // Use variable dt to avoid digital simulation errors.
   // Fast fraction informs were we are in the dt range between long and short.
   double fast_fraction = 0;  // Percent we are between long dt and short dt.
   bool   is_force_too_high = false;
   unsigned char color[3];
-  double total_kinetic_energy = 0;
+  double total_kinetic_e_all_w = 0;
 
-  double fv_dot_product;  // Force velocity dot product
-  bool   fv_dot_prod_set; // Was the above variable set.
+  volatile bool dist_calcs_done[kMaxParticles];
 
   explicit Particle(double mass_mev, double mass_kg, double avg_q, double q_amplitude,
                     double max_speed_allowed, double max_dist_allowed,
@@ -166,10 +169,10 @@ public:
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
     tee << "\t\t initial_charge " << initial_charge << std::endl;
-    for (double & p_energy_cycle_ : p_energy_cycle) {
+    for (double & p_energy_cycle_ : pot_energy_cycle) {
       p_energy_cycle_ = 0;
     }
-    for (double & p_energy_many_ : p_energy_many) {
+    for (double & p_energy_many_ : pot_e_cycle_many) {
       p_energy_many_ = 0;
     }
   }
@@ -228,25 +231,25 @@ public:
   // Below block of variables only used in below method.
   static const int kManyBuffersMultiplier = 32;
   static const int kTotalBuffersForMany = kPFrequencySubDivisions * kManyBuffersMultiplier;
-  double p_energy_cycle[kPFrequencySubDivisions];
-  double p_energy_many[kTotalBuffersForMany];
-  int    p_energy_cycle_index = 0;
-  int    p_energy_many_index = 0;
+  double pot_energy_cycle[kPFrequencySubDivisions];
+  double pot_e_cycle_many[kTotalBuffersForMany];
+  int    pot_energy_cycle_index = 0;
+  int    pot_e_cycle_many_index = 0;
   double sum_p_energy = 0;        // Only used in below method.
   double sum_p_energy_many = 0;   // Only used in below method.
 
   void CalcAveragePotentialEnergy() {
-    sum_p_energy += p_energy_cycle[p_energy_cycle_index++];
-    p_energy_cycle_index = p_energy_cycle_index % kPFrequencySubDivisions;
+    sum_p_energy += pot_energy_cycle[pot_energy_cycle_index++];
+    pot_energy_cycle_index = pot_energy_cycle_index % kPFrequencySubDivisions;
     // Subtract the potential energy that is going to roll off our average.
-    sum_p_energy -= p_energy_cycle[p_energy_cycle_index];
+    sum_p_energy -= pot_energy_cycle[pot_energy_cycle_index];
     // -1 because of the buffer subtracted above.
     potential_energy_average = sum_p_energy / (kPFrequencySubDivisions - 1);
 
-    sum_p_energy_many += p_energy_many[p_energy_many_index++];
-    p_energy_many_index = p_energy_many_index % kTotalBuffersForMany;
+    sum_p_energy_many += pot_e_cycle_many[pot_e_cycle_many_index++];
+    pot_e_cycle_many_index = pot_e_cycle_many_index % kTotalBuffersForMany;
     // Subtract the potential energy that is going to roll off our average.
-    sum_p_energy_many -= p_energy_many[p_energy_many_index];
+    sum_p_energy_many -= pot_e_cycle_many[pot_e_cycle_many_index];
     // -1 because of the buffer subtracted above.
     p_energy_many_average = sum_p_energy_many / (kTotalBuffersForMany - 1);
   }
@@ -255,17 +258,17 @@ public:
   void ConsiderLoggingToFile() {
     double danger_speed = max_speed_allow / 2;
 
-    bool particles_are_close      = dist_mag_from_largest <  kCloseToTrouble;
-    bool particles_are_close_very = dist_mag_from_largest < (kCloseToTrouble/2);
+    bool particles_are_close      = dist_mag_closest < (kCloseToTrouble * 2);
+    bool particles_are_close_very = dist_mag_closest < kCloseToTrouble;
     bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1) &&
             (prev_fast_fraction - fast_fraction > 0.1);
-    const int ll = 8;  // Limit logging to once every x lines.
+    const int ll = 1;  // Limit logging to once every x lines.
     if (log_count > 0 // || true
       ||  count%(ll*32) == 0
       || (count%(ll*16) == 0 && fast_fraction < 0.1)
-      || (count%(ll* 8) == 0 && fast_fraction < 0.01)
-      || (count%(ll* 4) == 0 && fast_fraction < 0.001  && particles_are_close)
-      || (count%(ll* 2) == 0 && fast_fraction < 0.0001 && particles_are_close_very)
+      || (count%(ll* 8) == 0 && fast_fraction < 0.02)
+      || (count%(ll* 4) == 0 && fast_fraction < 0.002  && particles_are_close)
+      || (count%(ll* 2) == 0 && fast_fraction < 0.0002 && particles_are_close_very)
       || (count% ll     == 0 && vel_mag > danger_speed && particles_are_close_very)
       || fast_fraction_changed_significantly
     ) {
@@ -292,55 +295,61 @@ public:
 
 
   std::string FormatLogLine() {
-    double oth_charge = p_exerting_largest_force->freq_charge;
-    double total_energy = potential_energy_average + total_kinetic_energy;
+    double charge_of_closest = p_closest_attracted->freq_charge;
+    double total_energy = potential_energy_average + total_kinetic_e_all_w;
 
     std::ostringstream log_line;
     log_line
-      << std::setw( 7) << count << (is_electron ? " e" : " p") << id
-      << "⋅" << (p_exerting_largest_force->is_electron ? "e" : "p") << p_exerting_largest_force_id
+      << std::setw( 7) << count <<   (is_electron ? " e" : " p") << id
+      << "⋅" << (p_closest_attracted->is_electron ? "e" : "p") << p_closest_attracted_id
       << std::scientific << std::setprecision(3)
-      << "  dis" << std::setw(10) << dist_mag_from_largest
-   //   << " ⋅" << vel_dot_product
-      << "  vel "  << vel_mag
-      << Log3dArray(vel     , "v"  )
-   // << Log3dArray(forces  , " fs")
-      << " f " << std::setprecision(2) << largest_force_mag
-   // << Log3dArray(magnet_f, "B"  )
-   // << Log3dArray(m_bg_f, "Bg"   )
-   // << Log3dArray(mf_q2, "Bq2"   ) << std::setprecision(1)
+      << "  dis" << std::setw(10) << dist_mag_closest
+      << "  vel " << vel_mag
+      << Log3dArray(vel, "v") << std::fixed << std::setprecision(1)
+      << "  d⋅v " << std::setw( 4) << dis_vel_dot_prod    // -1 = approaching, 1 = leaving
+      << std::scientific << std::setprecision(2)
+      << " f "    << std::setw( 9) << force_mag_closest
+      << Log3dArray(forces  , " fs")
+   // << Log3dArray(magnet_forces, "B"  )
+      << "  B "   << sqrt(magnet_forces[0]*magnet_forces[0] + magnet_forces[1]*magnet_forces[1] +
+                          magnet_forces[2]*magnet_forces[2])
    // << Log3dArray(acceleration, "a")
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
    // << Log3dArray(pos_change_3d, "chng") << std::setprecision(1)
    // << Log3dArray(pos     , "pos")
    // << " min pos change " << min_pos_change_desired
       << "  dt"   << std::setw( 9) << dt // << " new " << new_dt
-      << " fast"  << std::setprecision(3)   << std::setw(10) << fast_fraction
-      << std::setprecision(1) << std::fixed << std::setw( 6)
+      << " fast"  << std::setw(10) << std::setprecision(3) << fast_fraction
+                  << std::setw( 6) << std::setprecision(1) << std::fixed 
    // << round(fast_fraction * 10) * 10 << '%'
       << " chrg"  << std::setw( 4) << int(round((freq_charge/avg_q)*100)) << '%'
-      << " oth"   << std::setw( 4) << int(round((oth_charge / p_exerting_largest_force->q_amplitude) * 100)) << '%'
+      << " oth"   << std::setw( 4)
+      << int(round((charge_of_closest / p_closest_attracted->q_amplitude) * 100)) << '%'
    // << " inv"   << std::setw(12) << inverse_exponential
       << std::scientific << std::setprecision(2)
-      << "  pe"   << std::setw( 9) << potential_energy_average << " " << std::setw(8) << p_energy_many_average
-      << " ke"    << std::setw( 9) << total_kinetic_energy
+      // P energy goes negative, that is why width is larger.
+      << "  pe"   << std::setw(10) << potential_energy_average << " " << std::setw(8) << p_energy_many_average
+      << " ke"    << std::setw( 9) << total_kinetic_e_all_w
       << " te"    << std::setw( 9) << total_energy
     ;
-    if (fv_dot_prod_set)
-         log_line << " fv⋅" << std::setw( 8) << std::setprecision(3) << fv_dot_product;
     return log_line.str();
   }
 
-  // Log less stuff.
+/*
   void LogStuff(volatile int *num_drawing_event_already,
                 volatile int *num_wait_for_drawing_event) {
     CalcAveragePotentialEnergy();
-
+    bool moving_fast = vel_mag > kMaxSpeedElectron / 4;
     static int particle_to_log = 0;                // Log one of our standing EM waves at a time.
-    if (particle_to_log == id || log_count > 0) {  // Log based on time interval to console.
+    // Log based on time interval to console.
+    if (particle_to_log == id
+     || log_count > 0
+     || // Or there is an electron close to a proton.  In other words very strong forces exerted.
+        moving_fast
+     ) {
       auto now = std::chrono::system_clock::now(); // Get current time and see if we logged more than xxx milliseconds ago.
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
-      if (log_count > 0 || duration.count() > 1000) {
+      if (log_count > 0 || duration.count() > 800) {
         SetColorForConsole();
         std::string log_line_str = FormatLogLine()
           + " L " + std::to_string(*num_drawing_event_already)    // Late.  Drawing event already occurred.
@@ -357,6 +366,7 @@ public:
     }
     ConsiderLoggingToFile();  // Didn't log to screen and file based on time so consider logging to just file.
   }
+*/
 
 
   void HandleEscape() {
@@ -383,6 +393,17 @@ public:
     log_count = 2;  // Force logging around this event.
     tee << std::endl;
   }
+
+  void CheckForEscape() {
+    distance_mag_from_origin = sqrt(pow(pos[0], 2) + pow(pos[1], 2) + pow(pos[2], 2));
+    // If particle escapes, then zero out the velocity.
+    // This is a hack to limit the problem of energy gain.
+    // https://en.wikipedia.org/wiki/Energy_drift
+    if (distance_mag_from_origin > max_dist_allow) {
+      HandleEscape();
+    }
+  }
+
 
   // Get the charge that is based on freq and thus time.
   double GetSinusoidalChargeValue() const {
@@ -419,7 +440,6 @@ public:
   // 1. particle(s) moving
   // 2. Intrinsic magnetic field of the particles.
   //    Not implemented yet.
-  // 3. background magnetic field.  Negligible.  Could delete it.
   // https://phys.libretexts.org/Bookshelves/University_Physics/Calculus-Based_Physics_(Schnick)/Volume_B%3A_Electricity_Magnetism_and_Optics/B17%3A_Magnetic_Field%3A_Causes
   // https://en.wikipedia.org/wiki/Lorentz_force
   // Calculate magnetic field at point of q1:
@@ -429,119 +449,159 @@ public:
   // 1. Magnetic field of q1 due to it moving
   // 2. Magnetic field of q1 due to intrinsic magnetic field.
   void
-  CalculateMagneticForce(double *force, Particle *oth, double q1, double q2,
+  CalcMagneticForce(double *force, Particle *oth, double q1, double q2,
                          double *dist_vector, double dist_mag_2) {
     // Constants for calculating magnetic force1.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
     const double kPermeability  = 4 * M_PI * 1e-7;  // T * m / A
     const double kPermeabilityDividedBy4Pi = 1e-7;  // T * m / A
-    const double kBackgroundMagneticField = 1e-5;   // T = Tesla
-    const double kBackgroundMagneticFieldVector[3] = {0, 0,
-                                                         kBackgroundMagneticField};
-    // tee << "\t vel " << std::setprecision(1) << vel[0] << " " << vel[1] << " " << vel[2] << '\t';
 
-    double v1_cross_background[3];
-    double v2_cross_r[3];
-    cross(     vel, kBackgroundMagneticFieldVector, v1_cross_background);
-    cross(oth->vel,                    dist_vector, v2_cross_r);
-    double b_field_by_q2[3];  // Magnetic field created by q2.
+    double vel_oth_cross_dis[3];
+    cross(oth->vel, dist_vector, vel_oth_cross_dis);
+    double b_field_by_oth[3];    // Magnetic field created by other particle.
     for (int i = 0; i < 3; ++i) {
-      m_bg_f[i] = q1 * v1_cross_background[i];
       // https://en.wikipedia.org/wiki/Biot%E2%80%93Savart_law
       // https://docs.google.com/document/d/1Tc1AZltK30YA-u-corns3hVO7Zcx22uYE1TyT4i_NNU
-      b_field_by_q2[i] = kPermeabilityDividedBy4Pi * q2 * v2_cross_r[i] / dist_mag_2;
-      assert(!std::isnan(b_field_by_q2[i]));
+      b_field_by_oth[i] = kPermeabilityDividedBy4Pi * q2 * vel_oth_cross_dis[i] / dist_mag_2;
+      assert(!std::isnan(b_field_by_oth[i]));
     }
-    double v1_cross_field_by_q2[3];
-    cross(vel, b_field_by_q2, v1_cross_field_by_q2);
+    double vel_cross_b_field[3];
+    cross(vel, b_field_by_oth, vel_cross_b_field);
     for (int i = 0; i < 3; ++i) {
-      // Lorentz force1 from q2 magnetic field = q * v x B
-      mf_q2[i] = q1 * v1_cross_field_by_q2[i];
-      force[i] = m_bg_f[i] + mf_q2[i];
+      // Lorentz force1 from oth particle magnetic field = q * v x B
+      force[i] = q1 * vel_cross_b_field[i];
+      magnet_forces[i] += force[i];   // Only used for logging.
     }
     /*
     tee << " magnetic field q2 "
-              << b_field_by_q2[0] << ' ' << b_field_by_q2[1] << ' ' << b_field_by_q2[2];
-    tee << " magnetic force1 from q2 " << mf_q2[0] << ' ' << mf_q2[1] << ' ' << mf_q2[2];
+              << b_field_by_oth[0] << ' ' << b_field_by_oth[1] << ' ' << b_field_by_oth[2];
+    tee << " magnetic force1 from q2 " << magnet_f_oth[0] << ' ' << magnet_f_oth[1] << ' ' << magnet_f_oth[2];
     tee << "\t background f " << m_bg_f[0] << ' ' << m_bg_f[1] << ' ' << m_bg_f[2] << std::endl;
     */
   }
 
   void InitVarsToCalcForces() {
-    largest_force_mag = -1;
+    dist_mag_closest  = 1;      // 1 represents a large number that will be overwritten
+                                // quickly when checking for closest.
     is_force_too_high = false;
-    p_exerting_largest_force = nullptr;
+    p_closest_attracted = nullptr;
     for (double & force : forces) {
       force = 0;
     }
-    for (int i=0; i<num_particles_; ++i) {
-      dist_mag[i] = 0;
+    for (double & magnet_force : magnet_forces) {
+      magnet_force = 0;
     }
-  }
-
-  void CheckForEscape() {
-    distance_mag_from_origin = sqrt(pow(pos[0], 2) + pow(pos[1], 2) + pow(pos[2], 2));
-    // If particle escapes, then zero out the velocity.
-    // This is a hack to limit the problem of energy gain.
-    // https://en.wikipedia.org/wiki/Energy_drift
-    if (distance_mag_from_origin > max_dist_allow) {
-      HandleEscape();
+    for (int i=0; i<num_particles_; ++i) {
+      dist_mag [i] = 0;       // Will assert if we test and find these values.
+      dist_mag2[i] = 0;
     }
   }
 
   void CalcForcesFromParticle(Particle* oth /* other particle */) {
     int oth_id = oth->id;
+    if (oth_id == id) return;
     double dist[3];
     for (int i = 0; i < 3; ++i) {
       dist[i] = pos[i] - oth->pos[i];
     }
     double dist_magn;
     double dist_magn2;
-    if (oth_id > id) {  // If calcs already done.
+    // If we have already done the calcs, then use the cached values in the other standing wave.
+    if (oth->dist_calcs_done[oth_id]) {
       dist_magn  = oth->dist_mag [id];
       dist_magn2 = oth->dist_mag2[id];
     } else {
       dist_magn2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
       dist_magn  = sqrt(dist_magn2);
-      dist_mag[oth_id] = dist_magn;
+      dist_mag [oth_id] = dist_magn;  // Alternatively could just set dist_mag for other rather than mess with arrays,
+      dist_mag2[oth_id] = dist_magn2; // but that may have concurrency issue(s).
+      dist_calcs_done[oth_id] = true;
     }
+    assert(dist_magn  > 0);  // Since we can't handle infinite forces, lets assume this is always true.
+    assert(dist_magn2 > 0);  // Since we can't handle infinite forces, lets assume this is always true.
+
     double dist_unit_vector[3];
     for (int i = 0; i < 3; ++i) {
       dist_unit_vector[i] = dist[i] / dist_magn;
     }
     // Current charge varies based on frequency and time.
-    freq_charge = GetSinusoidalChargeValue();
-    double other_charge = oth->GetSinusoidalChargeValue();
+    double other_charge = oth->freq_charge;
     bool forces_attract = (freq_charge * other_charge) <= 0;
-    double force[3];
     // When opposite charges, force1 is negative.  When same charges, force1 is positive.
     double eforce_magnitude = kCoulomb * freq_charge * other_charge / dist_magn2;
-    double magnet_f[3];     // Magnetic force1.
-    CalculateMagneticForce(magnet_f, oth, freq_charge, other_charge, dist, dist_magn2);
+    // Possible optimization is to calculate magnetic force in separate thread.
+    // Another possibility is to skip it or use cached values,
+    // it doesn't change significantly, since it is negligible / insignificant.
+    double magnet_f[3];     // Magnetic force.
+    CalcMagneticForce(magnet_f, oth, freq_charge, other_charge, dist, dist_magn2);
     for (int i = 0; i < 3; ++i) {
-      force[i] = (eforce_magnitude * dist_unit_vector[i]) + magnet_f[i];
-      forces[i] += force[i];  // main return values used.
+      forces[i] += (eforce_magnitude * dist_unit_vector[i]) + magnet_f[i];
     }
-    force_magnitude = sqrt(pow(force[0], 2) + pow(force[1], 2) + pow(force[2], 2));
-    /*
-    if (id == 3 && forces_attract) {
-      std::cout << "\t\t\t force_magnitude " << force_magnitude
-                << "  largest_force_mag " << largest_force_mag
-                << "  forces_attract " << forces_attract
-                << "  oth_id " << oth_id
-                << "  p_exerting_largest_force " << p_exerting_largest_force
-                << std::endl;
-    }
-    */
-    if (force_magnitude > largest_force_mag && forces_attract) {
-      p_exerting_largest_force = oth;
-      p_exerting_largest_force_id = oth_id;
-      largest_force_mag = force_magnitude;
-      dist_mag_from_largest = dist_magn;
+    // Determine which attractive particle we are closest to.
+    // This is often the particle exerting the largest force.
+    if (dist_magn < dist_mag_closest && forces_attract) {
+      p_closest_attracted    = oth;
+      p_closest_attracted_id = oth_id;
+      dist_mag_closest = dist_magn;
       for (int i = 0; i < 3; ++i) {
-        dist_from_largest[i] = dist[i];
+        dist_closest[i] = dist[i];
       }
+      force_mag_closest = force_magnitude;
+    }
+  }
+
+
+  void CalcForcesFromParticle2(Particle* oth /* other particle */) {
+    int oth_id = oth->id;
+    if (oth_id == id) return;
+    double dist[3];
+    for (int i = 0; i < 3; ++i) {
+      dist[i] = pos[i] - oth->pos[i];
+    }
+    double dist_magn;
+    double dist_magn2;
+    // If we have already done the calcs, then use the cached values in the other standing wave.
+    if (oth->dist_calcs_done[oth_id]) {
+      dist_magn  = oth->dist_mag [id];
+      dist_magn2 = oth->dist_mag2[id];
+    } else {
+      dist_magn2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
+      dist_magn  = sqrt(dist_magn2);
+      dist_mag [oth_id] = dist_magn;  // Alternatively could just set dist_mag for other rather than mess with arrays,
+      dist_mag2[oth_id] = dist_magn2; // but that may have concurrency issue(s).
+      dist_calcs_done[oth_id] = true;
+    }
+    assert(dist_magn  > 0);  // Since we can't handle infinite forces, lets assume this is always true.
+    assert(dist_magn2 > 0);  // Since we can't handle infinite forces, lets assume this is always true.
+
+    double dist_unit_vector[3];
+    for (int i = 0; i < 3; ++i) {
+      dist_unit_vector[i] = dist[i] / dist_magn;
+    }
+    // Current charge varies based on frequency and time.
+    double other_charge = oth->freq_charge;
+    bool forces_attract = (freq_charge * other_charge) <= 0;
+    // When opposite charges, force1 is negative.  When same charges, force1 is positive.
+    double eforce_magnitude = kCoulomb * freq_charge * other_charge / dist_magn2;
+    // Possible optimization is to calculate magnetic force in separate thread.
+    // Another possibility is to skip it or use cached values,
+    // it doesn't change significantly, since it is negligible / insignificant.
+    double magnet_f[3];     // Magnetic force.
+    CalcMagneticForce(magnet_f, oth, freq_charge, other_charge, dist, dist_magn2);
+    for (int i = 0; i < 3; ++i) {
+      forces[i] += (eforce_magnitude * dist_unit_vector[i]) + magnet_f[i];
+    }
+    // Determine which attractive particle we are closest to.
+    // This is often the particle exerting the largest force.
+    if (dist_magn < dist_mag_closest && forces_attract) {
+      p_closest_attracted    = oth;
+      p_closest_attracted_id = oth_id;
+      dist_mag_closest = dist_magn;
+      for (int i = 0; i < 3; ++i) {
+        dist_closest[i] = dist[i];
+      }
+      force_mag_closest = force_magnitude;
     }
   }
 
@@ -586,7 +646,7 @@ public:
     // In other words dt should be shortest time.
     // fast_fraction < 0 when distance shorter than kCloseToTrouble.
     // fast_fraction > 1 when distance is further than (kBohrRadius / 8).
-    fast_fraction = (dist_mag_from_largest - kSmallDtDistance) / (safe_distance - kSmallDtDistance);
+    fast_fraction = (dist_mag_closest - kSmallDtDistance) / (safe_distance - kSmallDtDistance);
     if (fast_fraction > 1) {
       fast_fraction = 1;
       return kLongDt;
@@ -608,7 +668,6 @@ public:
   // With little or no space between particles, forces approach infinity.
   // If the simulation won't work because of large errors because of huge forces.
   void TeleportIfTooCloseToOtherParticle() {
-    fv_dot_prod_set = false;
     // 0.3 = number pulled out of thin air.
     // Higher number = faster particle gets ejected.
     // Lower number = more likely to get teleported, loop around proton, get closer.
@@ -619,43 +678,42 @@ public:
     // Force needs to be in the same direction as velocity.
     // If not then we don't to worry about particles heading in opposite directions.
     // Need unit vector for velocity and force, then do dot product.
-    Particle* oth = p_exerting_largest_force;
-    double f[3];
-    for (int i = 0; i < 3; ++i) {
-      f[i] = forces[i] / force_magnitude;
-    }
-    // dot product between force and velocity.
-    fv_dot_product = vel_uv[0] * f[0] + vel_uv[1] * f[1] + vel_uv[2] * f[2];
-    fv_dot_prod_set = true;
+    Particle* close = p_closest_attracted;
     // If the vectors are pointing in the same direction (aligned), their dot product is 1.
     // If they are perpendicular, it's 0. If they are pointing in opposite directions, it's -1.
-    bool force_same_dir_as_v = fv_dot_product > .75;    // .75 = guess = ? degrees
+    // Since we are using distance as a proxy for force, sign is reversed.
+    bool force_same_dir_as_v = dis_vel_dot_prod < -0.75;    // -0.75 = guess
     if (!force_same_dir_as_v) return;
 
-    oth->log_prev_log_lines(4);
+    close->log_prev_log_lines(4);
     log_prev_log_lines();
-    tee << "\t Force too high. " << (is_electron ? "e" : "p") << id << "  dot product " << fv_dot_product
+    tee << "\t Force too high. " << (is_electron ? "e" : "p") << id << "  dot product " << dis_vel_dot_prod
         << "  f mag " << force_magnitude
         << " x " << forces[0] << " y " << forces[1] << " z " << forces[2] << std::endl;
-    tee << "\t\t\t velocity unit vector: " << vel_uv[0] << " y " << vel_uv[1] << " " << vel_uv[2]
-        << "\t force unit vector: " << f[0] << " y " << f[1] << " " << f[2] << std::endl;
-    tee << "  Dist " << dist_mag_from_largest << "  Teleporting to other side of "
-        << (oth->is_electron ? "electron" : "proton")
+    tee << "\t\t\t velocity unit vector: " << vel_unit_vec[0]
+                                  << " y " << vel_unit_vec[1]
+                                 << " "    << vel_unit_vec[2]
+        << "\t distance unit vector: " << dist_unit_vec[0]
+                              << " y " << dist_unit_vec[1]
+                              << " "   << dist_unit_vec[2] << std::endl;
+    tee << "  Dist " << dist_mag_closest << "  Teleporting to other side of "
+        << (close->is_electron ? "electron" : "proton")
         << ".  pos " << pos[0] << " " << pos[1] << " " << pos[2]
-        << "  oth pos " << oth->pos[0] << " " << oth->pos[1] << " " << oth->pos[2]
+        << "  close pos " << close->pos[0] << " " << close->pos[1] << " " << close->pos[2]
         << std::endl;
     // Teleport the particle to other side of the close by particle.
     for (int i = 0; i < 3; ++i) {
-      pos[i] += -2 * dist_from_largest[i];
+      pos[i] += -2 * dist_closest[i];
     }
     tee << "\t Teleported to " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
     v_when_teleported = vel_mag;
     log_count = 8;               // Force extra logging after this event.
-    oth->log_file << "\t\t\t" << (is_electron ? "e" : "p") << id << " teleported "  << std::endl;
-    oth->log_count = 4;          // Force extra logging for other particle.
+    close->log_file << "\t\t\t" << (is_electron ? "e" : "p") << id << " teleported "  << std::endl;
+    close->log_count = 4;          // Force extra logging for other particle.
   }
 
   void ApplyForcesToParticle() {
+    force_magnitude = sqrt(pow(forces[0], 2) + pow(forces[1], 2) + pow(forces[2], 2));
     for (int i = 0; i < 3; ++i) {
       acceleration[i] = forces[i] / this->mass_kg;
       vel[i] += acceleration[i] * dt;
@@ -665,12 +723,20 @@ public:
     new_dt = CalcNewDt(&fast_fraction);
     for (int i = 0; i < 3; ++i) {
       pos_change_3d[i]  = vel[i] * dt;
-      pos     [i] += pos_change_3d[i];
-      // vel_uv_old[i] = vel_uv[i];
-      vel_uv    [i] = vel   [i] / vel_mag;
+      pos          [i] += pos_change_3d[i];
+      vel_unit_vec [i]  = vel[i] / vel_mag;
+      dist_unit_vec[i]  = dist_closest[i] / dist_mag_closest;
     }
+    // dot product between dist of closest and velocity.
+    dis_vel_dot_prod = dist_unit_vec[0] * vel_unit_vec[0] +
+                       dist_unit_vec[1] * vel_unit_vec[1] +
+                       dist_unit_vec[2] * vel_unit_vec[2];
+    // Use dot product between velocity and distance of closest to determine
+    // if coming or going relative to closest attracting particle.
+    // If the vectors are pointing in the same direction (aligned), their dot product is 1.
+    // If they are perpendicular, it's 0. If they are pointing in opposite directions, it's -1.
+
     pos_change_magnitude = sqrt(pow(pos_change_3d[0], 2) + pow(pos_change_3d[1], 2) + pow(pos_change_3d[2], 2));
-    // vel_dot_product = vel_uv[0] * vel_uv_old[0] + vel_uv[1] * vel_uv_old[1] + vel_uv[2] * vel_uv_old[2];
     // When particles are on top of each other forces approach infinity.
     // To get around that problem we teleport to other side of particle.
     // Alternative approach is to have a preprogrammed path and not bother with force calcs.
@@ -701,11 +767,17 @@ public:
 
   volatile bool screen_draw_event_occurred = true;
   // Only used for logging.
+  // If we are doing lots of calcs because electron close to proton, then we will wait for
+  // draw event before finishing calcs.  That way we get maximum movement per frame.
+  // In other words: simulation is too damn slow, and we want speed up so use all of the
+  // compute budget per frame.
   volatile int num_drawing_event_already  = 0; // Drawing event already occurred, no need to wait.
   volatile int num_wait_for_drawing_event = 0;
 
   explicit Particles(int numParticles) : num_particles(numParticles) {
     if (num_particles == 0) return;
+    const int num_threads = std::thread::hardware_concurrency();
+    std::cout << "\t\t\t num threads " << num_threads << std::endl;
     num_particles_ = num_particles;
     std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
               << "\t kShortDt " << kShortDt << "  kLongDt " << kLongDt << std::endl;
@@ -748,31 +820,75 @@ public:
     // if (num_particles > 5) pars[5]->color[2] = 255;   // Try to make color less dark.
   }
 
+
+  // Log a particle and misc info.
+  void LogStuff(int particle_to_log, Particle* w) {
+    // Log based on time interval to console.
+    if (particle_to_log == w->id || w->log_count > 0) {
+      auto now = std::chrono::system_clock::now(); // Get current time and see if we logged more than xxx milliseconds ago.
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
+      if (w->log_count > 0 || duration.count() > 800) {
+        w->SetColorForConsole();
+        std::string log_line_str = w->FormatLogLine()
+          + " L " + std::to_string(num_drawing_event_already)    // Late.  Drawing event already occurred.
+          + " E " + std::to_string(num_wait_for_drawing_event);  // Calcs were early.  Waited on drawing event.
+        num_drawing_event_already  = 0;
+        num_wait_for_drawing_event = 0;
+        w->tee << log_line_str << std::endl;
+        last_log_time = now;
+        particle_to_log = (particle_to_log + 1) % num_particles_;
+        w->log_count--;
+        w->logToBuffer(log_line_str);
+        return;
+      }
+    }
+    w->ConsiderLoggingToFile();  // Didn't log to screen so consider logging to just file.
+  }
+
+
   void CalcEnergyAndLog() {
     // Calculate potential energy.
-    double potential_energy = 0;
-    double total_kinetic_energy = 0;
+    double potential_energy_all_w = 0;
+    double total_kinetic_e_all_w = 0;
+    bool close_electron_proton = false;
+    double closest = 1;  // meters.  Just setting to a large number.
+    int    closest_id;
+    static int w_to_log_to_screen = 0;  // Rotate through particles to log to screen, when we don't 
+
     // Potential energy = sum of all potential energies.
     // Set the potential energy for each pair of particles.
     for (int i = 0; i < num_particles; ++i) {
-      Particle* p1 = pars[i];
-      total_kinetic_energy += 0.5 * p1->mass_kg * p1->vel_mag2;
+      Particle* w1 = pars[i];
+      total_kinetic_e_all_w += 0.5 * w1->mass_kg * w1->vel_mag2;
       for (int j = i+1; j < num_particles; ++j) {
-        Particle* p2 = pars[j];
-        assert(p1->dist_mag[j] != 0);
-        potential_energy += kCoulomb * p1->freq_charge * p2->freq_charge / p1->dist_mag[j];
+        Particle* w2 = pars[j];
+        assert(w1->dist_mag[j] != 0);
+        potential_energy_all_w += kCoulomb * w1->freq_charge * w2->freq_charge / w1->dist_mag[j];
+      }
+      if (w1->is_electron && w1->dist_mag_closest < kCloseToTrouble*8
+       && w1->dist_mag_closest < closest) {
+        closest = w1->dist_mag_closest;
+        close_electron_proton = true;
+        closest_id = w1->id;
       }
     }
     for (int i = 0; i < num_particles; ++i) {
-      Particle* p = pars[i];
-      p->p_energy_cycle[p->p_energy_cycle_index] = potential_energy;
-      p->p_energy_many [p->p_energy_many_index ] = potential_energy;
-      p->p_energy_cycle_index = (p->p_energy_cycle_index + 1) % kPFrequencySubDivisions;
-      p->p_energy_many_index  = (p->p_energy_many_index  + 1) % (kPFrequencySubDivisions * kPFrequencySubDivisions);
-      p->total_kinetic_energy = total_kinetic_energy;
-      p->LogStuff(&num_drawing_event_already, &num_wait_for_drawing_event);
+      // w = wave.  Don't use p because it is confusing with p for potential energy.
+      Particle* w = pars[i];
+      w->pot_energy_cycle[w->pot_energy_cycle_index] = potential_energy_all_w;
+      w->pot_e_cycle_many[w->pot_e_cycle_many_index] = potential_energy_all_w;
+      w->pot_energy_cycle_index = (w->pot_energy_cycle_index + 1) % kPFrequencySubDivisions;
+      w->pot_e_cycle_many_index = (w->pot_e_cycle_many_index + 1) % (kPFrequencySubDivisions * kPFrequencySubDivisions);
+      w->total_kinetic_e_all_w = total_kinetic_e_all_w;
+      w->CalcAveragePotentialEnergy();
+      if (close_electron_proton) {
+        LogStuff(closest_id, w);
+      } else {
+        LogStuff(w_to_log_to_screen, w);
+      }
     }
-    count++;
+    // If we didn't log an energetic electron than increment the particle we are going to log next.
+    if (!close_electron_proton) ++w_to_log_to_screen;
   }
 
   void CalcForcesOnParticle(Particle * part_ptr) {
@@ -784,46 +900,8 @@ public:
     }
   }
 
-  // When electron and proton are close, things are exciting.  Not worried about things moving fast enough.
-  // When far apart then lets speed simulation up by not waiting on screen refresh.
-  double CalcMinPosChangeDesired() {
-    // I'd hate to see an electron fly across the screen faster than a second.
-    // Assumes screen refresh rate is 60 HZ.
-    const double kMaxPosChangeDesired = (kBohrRadius / 60) / 8;
-    const double kMinPosChangeDesired = 1e-14;
-    if (count == 0) {
-      return 0;
-    }
-    // Select electron that is having the highest attractive forces.
-    Particle* e = pars[0];
-    for (int i=1; i<(num_particles/2); ++i) {
-      Particle* oth = pars[i];
-      if (e->dist_mag_from_largest > oth->dist_mag_from_largest) {
-        e = oth;
-      }
-    }
-    double distance = e->dist_mag_from_largest;
-    // If we are at or under danger distance, then min change desired should be small.
-    // If we are far from danger, then min change desired should be big.
-    // How close to danger distance are we?
-    double danger_percent = distance / (kMaxPosChangeDesired - kCloseToTrouble);
-         if (danger_percent < 0) danger_percent = 0;
-    else if (danger_percent > 1) danger_percent = 1;
-    double min_pos_change_desired = kMaxPosChangeDesired + ((kMinPosChangeDesired - kMaxPosChangeDesired) * danger_percent);
-         if (min_pos_change_desired < kMinPosChangeDesired) min_pos_change_desired = kMinPosChangeDesired;
-    else if (min_pos_change_desired > kMaxPosChangeDesired) min_pos_change_desired = kMaxPosChangeDesired;
-    return min_pos_change_desired;
-  }
-
-
-  // How to decide if movement is too much?  Just guess?
-  // double CalcMinPosChangeDesired() {
-  // }
-
   // Called once for every screen draw.
   void moveParticles() {
-    // Loop without waiting on screen refresh to make simulation run faster.
-    double min_pos_change_desired = CalcMinPosChangeDesired();
     // Lets not move faster than it would take an electron to go from center to edge,
     // faster than two seconds.
     const double max_pos_change_desired = kBohrRadius / (60*2);  // 60 fps
@@ -845,6 +923,13 @@ public:
            // We shouldn't be waiting on significant movement.
            // Should wait for good amount of movement.
            // Or wait for movement would be to fast if distance is too big.
+      for (int i = 0; i < num_particles; ++i) {
+        Particle * wave_ptr = pars[i];
+        wave_ptr->freq_charge = wave_ptr->GetSinusoidalChargeValue();
+        for (int j = 0; j < num_particles; ++j) {
+          wave_ptr->dist_calcs_done[j] = false;
+        }
+      }
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         CalcForcesOnParticle(part_ptr);
@@ -860,6 +945,7 @@ public:
       // std::cout << "\t dt " << std::scientific << dt << std::endl;
       CalcEnergyAndLog();
       time_ += dt;
+      count++;      // Num iterations of move particles.
       for (int j = 0; j < num_particles; ++j) {
         if (pos_change_per_particle[j] > max_pos_change_desired) {
           exit_loop = true;
