@@ -96,7 +96,7 @@ using namespace Math::Literals;
 
 ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments, NoCreate} {
   Utility::Arguments args;
-  args.addOption('s', "spheres", "4")
+  args.addOption('s', "spheres", "2")
           .setHelp("spheres", "number of spheres to simulate", "N")
       .addOption('r', "sphere-radius", "0.025")
           .setHelp("sphere-radius", "sphere radius", "R")
@@ -170,7 +170,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
-    auto sphere_radius = (p->is_electron ? 1 : 1.5) * _sphereRadius;
+    auto sphere_radius = (p->is_electron || numSpheres <= 4 ? 1 : 1.5) * _sphereRadius;
     _sphereInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[i]) *
                                                   Matrix4::scaling(Vector3{sphere_radius}) * 3;
     _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();

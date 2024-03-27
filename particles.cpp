@@ -29,14 +29,14 @@ const double kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wi
 const double kEMassKg = 9.1093837015e-31;   // kg
 const double kPMassKg = 1.67262192369e-27;  // kg
 const double kBohrRadius = 5.29177210903e-11;  // Meters
-const double kBohrRadiusProton = kBohrRadius / 3;  // value = swag / trial and error
+const double kBohrRadiusProton = kBohrRadius / 2;  // value = swag / trial and error
                                                
 const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
 const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 8;
-const int    kPFrequencySubDivisions = 64;
+const int    kPFrequencySubDivisions = 16;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
 const double kShortDt = 1 / ( kPFrequency * kPFrequencySubDivisions );
@@ -53,7 +53,7 @@ const double kMaxSpeedProton = kMaxSpeedElectron * (kEMassMEv / kPMassMEv);  // 
 // Causes short duration dt , logging to increase, and simulation speed to slow down.
 const double kCloseToTrouble = 2.3e-13;
 const double kForceTooHigh = 0.3;  // From trial and error.
-
+const bool   kHoldingProtonSteady = true;  // Don't move the proton(s).
 
 // Global variables
 // Delta time in seconds.
@@ -118,9 +118,11 @@ public:
   double vel_mag = 0;
   double vel_mag2 = 0;        // Velocity magnitude squared.
   double vel_unit_vec[3];
-  // Used for logging to determine of electron is coming or going relative to closest proton.
-  double dis_vel_dot_prod;
   double new_dt = 0;          // Global dt = smallest new dt.
+  // Used for logging to determine of electron is coming or going relative to closest proton.
+  double       dis_vel_dot_prod;
+  double       dis_vel_dot_prod_old;
+  bool flipped_dis_vel_dot_prod = false;
 
   // Only used for debug.  Not used in simulation calculations.
   const int id;            // Unique id for each particle.  Just used for logging.
@@ -262,7 +264,7 @@ public:
     bool particles_are_close_very = dist_mag_closest < kCloseToTrouble;
     bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1) &&
             (prev_fast_fraction - fast_fraction > 0.1);
-    const int ll = 256;  // Limit logging to once every x lines.
+    const int ll = 1;  // Limit logging to once every x lines.
     if (log_count > 0 // || true
       ||  count%(ll*32) == 0
       || (count%(ll*16) == 0 && fast_fraction < 0.1)
@@ -601,7 +603,9 @@ public:
     // in.  Hack to limit problem of energy gain.
     if (dist_mag_closest < (kSmallDtDistance*32) && dis_vel_dot_prod >= 0 && is_electron) {
       new_dt = new_dt / 2;
-      //std::cout << "  Lowering dt to " << new_dt << "  dist " << dist_mag_closest << std::endl;
+      if (dis_vel_dot_prod_old < 0) {
+        flipped_dis_vel_dot_prod = true;
+      }
     }
   }
 
@@ -662,10 +666,15 @@ public:
     vel_mag  = sqrt(vel_mag2);
     for (int i = 0; i < 3; ++i) {
       pos_change_3d[i]  = vel[i] * dt;
-      pos          [i] += pos_change_3d[i];
+      if (!kHoldingProtonSteady || is_electron) {
+        pos        [i] += pos_change_3d[i];
+      }
       vel_unit_vec [i]  = vel[i] / vel_mag;
       dist_unit_vec[i]  = dist_closest[i] / dist_mag_closest;
     }
+    dis_vel_dot_prod_old = dis_vel_dot_prod;
+    flipped_dis_vel_dot_prod = false;
+
     // dot product between dist of closest and velocity.
     dis_vel_dot_prod = dist_unit_vec[0] * vel_unit_vec[0] +
                        dist_unit_vec[1] * vel_unit_vec[1] +
@@ -736,6 +745,9 @@ public:
         p->color[0] = 150 + (std::rand() % 105);
         p->color[1] =  64 + (std::rand() % 191);
         p->color[2] =   0 + (std::rand() % 210);
+        if (i == 0) {
+          p->pos[0] = - kBohrRadius;
+        }
       } else {
         pars[i] = new Proton(i);
         p = pars[i];
@@ -745,10 +757,12 @@ public:
       }
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " " << int(p->color[2]);
-      double max_dist = p->max_dist_allow * 0.5;
-      // Set random locations
+      // double max_dist = p->max_dist_allow * 0.5;
       for (int j = 0; j < 3; ++j) {
-        p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.9) * kBohrRadiusProton;
+        if (num_particles > 2) {
+          // Set random locations
+          p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.9) * kBohrRadiusProton;
+        }
         // Increase brightness
         int increase = p->color[j] / 4;
         if (p->color[j] + increase > 255) p->color[j]  = 255;
@@ -758,7 +772,6 @@ public:
                 << " " << int(p->color[2]) << std::endl;
       std::cout << "\t\t pos " << p->pos[0] << " " << p->pos[1] << " " << p->pos[2] << std::endl;
     }
-    // if (num_particles > 5) pars[5]->color[2] = 255;   // Try to make color less dark.
   }
 
   int w_to_log_id = 0;  // Rotate through particles to log to screen, when we don't
@@ -766,11 +779,14 @@ public:
   // Log a particle and misc info.
   void LogStuff(Particle* w) {
     // Log based on time interval to console.
-    if (w_to_log_id == w->id || w->log_count > 0) {
+    if (w_to_log_id == w->id || w->log_count > 0 || w->flipped_dis_vel_dot_prod) {
       auto now = std::chrono::system_clock::now(); // Get current time and see if we logged more than xxx milliseconds ago.
       auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
-      if (w->log_count > 0 || duration.count() > 800) {
+      if (w->log_count > 0 || duration.count() > 800 || w->flipped_dis_vel_dot_prod) {
         w->SetColorForConsole();
+        if (w->flipped_dis_vel_dot_prod) {
+          w->log_prev_log_lines(1);
+        }
         std::string log_line_str = w->FormatLogLine(num_drawing_event_already,
                                                     num_wait_for_drawing_event);
         num_drawing_event_already  = 0;
@@ -835,12 +851,7 @@ public:
 
   // Called once for every screen draw.
   void moveParticles() {
-    // Lets not move faster than it would take an electron to go from center to edge,
-    // faster than two seconds.
-    const double max_pos_change_desired = kBohrRadius / (60*2);  // 60 fps
 
-    // Below may not be needed after threading and draw state variables added.
-    // const int kMaxTimesToGetSignificantMovement = (4096 * 4) / num_particles;
     double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change_per_particle[j] = 0;
@@ -849,10 +860,8 @@ public:
       // Only check for escape once per significant movement to save on CPU.
       pars[i]->CheckForEscape();
     }
-    // for (int i=0; i<kMaxTimesToGetSignificantMovement && !screen_draw_event_occurred; ++i) {
-    bool exit_loop = false;
     // Do until we get significant movement, then wait for screen draw.
-    for (int loop = 0; loop<(4096*2) && !exit_loop && !screen_draw_event_occurred; ++loop) {
+    for (int iter = 0; iter<512 && !screen_draw_event_occurred; ++iter) {
       for (int i = 0; i < num_particles; ++i) {
         Particle * wave_ptr = pars[i];
         wave_ptr->freq_charge = wave_ptr->GetSinusoidalChargeValue();
@@ -866,7 +875,7 @@ public:
         part_ptr->ApplyForcesToParticle();
         pos_change_per_particle[j] += std::abs(pars[j]->pos_change_magnitude);
       }
-      // tee << " change " << pos_change << std::endl;
+
       // Find the shortest dt and set the new dt to that.
       dt = pars[0]->new_dt;
       for (int j = 1; j < num_particles; ++j) {
@@ -881,8 +890,11 @@ public:
       }
 
       for (int j = 0; j < num_particles; ++j) {
+        // Lets not move faster than it would take an electron to go from center to edge,
+        // faster than two seconds.
+        const double max_pos_change_desired = kBohrRadius / (60*2);  // 60 fps
         if (pos_change_per_particle[j] > max_pos_change_desired) {
-          exit_loop = true;
+          return;
         }
       }
       // If screen_draw_event_occurred then we are over our computation budget.
