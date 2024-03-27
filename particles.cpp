@@ -482,7 +482,7 @@ public:
     }
   }
 
-  void ForcesFromParticle(Particle* oth /* other particle */) {
+  void CalcForcesFromParticle(Particle* oth /* other particle */) {
     int oth_id = oth->id;
     if (oth_id == id) return;
     double dist[3];
@@ -602,7 +602,7 @@ public:
     // when leaving close proton.  Decrease dt so that we can lower speed as much as was gained coming
     // in.  Hack to limit problem of energy gain.
     if (dist_mag_closest < (kSmallDtDistance*32) && dis_vel_dot_prod >= 0 && is_electron) {
-      new_dt = new_dt / 2;
+      // new_dt = new_dt / 2;
       if (dis_vel_dot_prod_old < 0) {
         flipped_dis_vel_dot_prod = true;
       }
@@ -793,7 +793,7 @@ public:
         num_wait_for_drawing_event = 0;
         w->tee << log_line_str << std::endl;
         last_log_time = now;
-        w_to_log_id = (w_to_log_id + 1) % num_particles_;
+        w_to_log_id = (w_to_log_id + 1) % (num_particles_ / 2);   // Divde by 2 to skip logging protons to screen.
         w->log_count--;
         w->logToBuffer(log_line_str);
         return;
@@ -845,7 +845,7 @@ public:
     part_ptr->InitVarsToCalcForces();
     for (int i = 0; i < num_particles; ++i) {
       if (i == part_num) continue;
-      part_ptr->ForcesFromParticle(pars[i]);
+      part_ptr->CalcForcesFromParticle(pars[i]);
     }
   }
 
@@ -861,7 +861,7 @@ public:
       pars[i]->CheckForEscape();
     }
     // Do until we get significant movement, then wait for screen draw.
-    for (int iter = 0; iter<512 && !screen_draw_event_occurred; ++iter) {
+    for (int iter = 0; iter<256 && !screen_draw_event_occurred; ++iter) {
       for (int i = 0; i < num_particles; ++i) {
         Particle * wave_ptr = pars[i];
         wave_ptr->freq_charge = wave_ptr->GetSinusoidalChargeValue();
