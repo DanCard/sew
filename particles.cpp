@@ -52,7 +52,7 @@ const double kMaxSpeedProton = kMaxSpeedElectron * (kEMassMEv / kPMassMEv);  // 
 // If electron and proton are closer than this then there is trouble due to simulation error.
 // Causes short duration dt , logging to increase, and simulation speed to slow down.
 const double kCloseToTrouble = 2.3e-13;
-const double kForceTooHigh = 0.3;  // From trial and error.
+const double kForceTooHigh = 0.3;  // 0.3 from trial and error.
 const bool   kHoldingProtonSteady = true;  // Don't move the proton(s).
 
 // Global variables
@@ -137,9 +137,9 @@ public:
   // To combat limitations of simulation, teleport the electron to other side of proton.
   double v_when_teleported = 0;
   double prev_fast_fraction = 0;
-  int    log_count = 2;      // Force logging around an event.
-  static const int max_prev_log_lines = 8;
-  std::vector<std::string> prev_log_lines = std::vector<std::string>(max_prev_log_lines);
+  int    log_count;      // Force logging around an event.
+  static const int kMaxPrevLogLines = 4;
+  std::vector<std::string> prev_log_lines = std::vector<std::string>(kMaxPrevLogLines);
   int    prev_log_line_index = 0;
   double magnet_fs[3];  // Sum of all magnetic forces from all particles.
   double acceleration[3];
@@ -167,6 +167,7 @@ public:
           logger(is_electron ? ("e" + std::to_string(id) + ".log")
                               : "p" + std::to_string(id) + ".log"), tee(logger.get_stream())
   {
+    log_count = is_electron ? 2 : 0;
     std::cout << "\t" << (is_electron ? "electron" : "proton") << " " << id
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
@@ -181,7 +182,7 @@ public:
 
   void logToBuffer(const std::string &s) {
     prev_log_lines[prev_log_line_index] = s;
-    prev_log_line_index = (prev_log_line_index + 1) % max_prev_log_lines;
+    prev_log_line_index = (prev_log_line_index + 1) % kMaxPrevLogLines;
   }
 
   void SetColorForConsole() {
@@ -191,13 +192,13 @@ public:
   void log_prev_log_lines(int max_lines_to_log = 8) {
     SetColorForConsole();
     int index = prev_log_line_index;
-    // int limit = std::min(max_lines_to_log, max_prev_log_lines);
-    int limit = max_lines_to_log < max_prev_log_lines ? max_lines_to_log : max_prev_log_lines;
+    // int limit = std::min(max_lines_to_log, kMaxPrevLogLines);
+    int limit = max_lines_to_log < kMaxPrevLogLines ? max_lines_to_log : kMaxPrevLogLines;
     for (int i = 0; i < limit; ++i) {
       if (!prev_log_lines[index].empty()) {
         tee << prev_log_lines[index] << " P" << std::endl;
       }
-      index = (index + 1) % max_prev_log_lines;
+      index = (index + 1) % kMaxPrevLogLines;
     }
   }
 
@@ -611,8 +612,8 @@ public:
 
   // With little or no space between particles, forces approach infinity.
   // If the simulation won't work because of large errors because of huge forces.
-  void TeleportIfTooCloseToOtherParticle() {
-    // 0.3 = number pulled out of thin air.
+  void TeleportIfTooCloseToProton() {
+    if (!is_electron) return;
     // Higher number = faster particle gets ejected.
     // Lower number = more likely to get teleported, loop around proton, get closer.
     is_force_too_high = force_magnitude > kForceTooHigh;
@@ -629,8 +630,9 @@ public:
     bool force_same_dir_as_v = dis_vel_dot_prod < -0.75;    // -0.75 = guess
     if (!force_same_dir_as_v) return;
 
-    close->log_prev_log_lines(4);
-    log_prev_log_lines();
+    if (num_particles_ > 2)
+    close->log_prev_log_lines(2);
+           log_prev_log_lines();
     tee << "\t Force too high. " << (is_electron ? "e" : "p") << id << "  dot product " << dis_vel_dot_prod
         << "  f mag " << force_magnitude
         << " x " << forces[0] << " y " << forces[1] << " z " << forces[2] << std::endl;
@@ -653,7 +655,8 @@ public:
     v_when_teleported = vel_mag;
     log_count = 8;               // Force extra logging after this event.
     close->log_file << "\t\t\t" << (is_electron ? "e" : "p") << id << " teleported "  << std::endl;
-    close->log_count = 4;          // Force extra logging for other particle.
+    if (num_particles_ > 2)
+      close->log_count = 2;          // Force extra logging for other particle.
   }
 
   void ApplyForcesToParticle() {
@@ -690,7 +693,9 @@ public:
     // When particles are on top of each other forces approach infinity.
     // To get around that problem we teleport to other side of particle.
     // Alternative approach is to have a preprogrammed path and not bother with force calcs.
-    TeleportIfTooCloseToOtherParticle();
+    if (is_electron) {
+      TeleportIfTooCloseToProton();
+    }
   }
 };
 
@@ -735,6 +740,11 @@ public:
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
 
     assert(numParticles <= kMaxParticles);
+    int divider;  // Prefer bright colors, but with many particles becomes indistinguishable.
+         if (num_particles <= 2)  divider = 2;
+    else if (num_particles <= 4)  divider = 3;
+    else if (num_particles <= 6)  divider = 4;
+    else                          divider = 5;  // With more particles don't brighten as much.
     for (int i = 0; i < numParticles; ++i) {
       Particle* p;
       if (i < numParticles / 2) {
@@ -742,9 +752,9 @@ public:
         p = pars[i];
         // Set pseudo random colors.  Electrons tend to be more red.  Protons tend to be more blue.
         // Prefer bright colors over dark colors.
-        p->color[0] = 150 + (std::rand() % 105);
-        p->color[1] =  64 + (std::rand() % 191);
-        p->color[2] =   0 + (std::rand() % 210);
+        p->color[0] = 151 + (std::rand() % 105);
+        p->color[1] = 100 + (std::rand() % 155);
+        p->color[2] =   0 + (std::rand() % 240);
         if (i == 0) {
           p->pos[0] = - kBohrRadius;
         }
@@ -752,8 +762,8 @@ public:
         pars[i] = new Proton(i);
         p = pars[i];
         p->color[0] =   0 + (std::rand() % 210);
-        p->color[1] =   0 + (std::rand() % 255);
-        p->color[2] = 150 + (std::rand() % 105);
+        p->color[1] =   0 + (std::rand() % 240);
+        p->color[2] = 151 + (std::rand() % 105);
       }
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " " << int(p->color[2]);
@@ -764,7 +774,7 @@ public:
           p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.9) * kBohrRadiusProton;
         }
         // Increase brightness
-        int increase = p->color[j] / 4;
+        int increase = p->color[j] / divider;
         if (p->color[j] + increase > 255) p->color[j]  = 255;
         else                              p->color[j] += increase;
       }
@@ -793,7 +803,7 @@ public:
         num_wait_for_drawing_event = 0;
         w->tee << log_line_str << std::endl;
         last_log_time = now;
-        w_to_log_id = (w_to_log_id + 1) % (num_particles_ / 2);   // Divde by 2 to skip logging protons to screen.
+        w_to_log_id = (w_to_log_id + 1) % (num_particles_ / 2);   // Divide by 2 to skip logging protons to screen.
         w->log_count--;
         w->logToBuffer(log_line_str);
         return;
@@ -861,7 +871,7 @@ public:
       pars[i]->CheckForEscape();
     }
     // Do until we get significant movement, then wait for screen draw.
-    for (int iter = 0; iter<256 && !screen_draw_event_occurred; ++iter) {
+    for (int iter = 0; iter<4096 && !screen_draw_event_occurred; ++iter) {
       for (int i = 0; i < num_particles; ++i) {
         Particle * wave_ptr = pars[i];
         wave_ptr->freq_charge = wave_ptr->GetSinusoidalChargeValue();
