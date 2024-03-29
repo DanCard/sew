@@ -247,6 +247,7 @@ public:
     potential_energy_average = sum_p_energy / (kPFrequencySubDivisions - 1);
   }
   
+
   void ConsiderLoggingToFile(int num_drawing_event_already, int num_wait_for_drawing_event) {
     double danger_speed = max_speed_allow / 2;
 
@@ -254,7 +255,15 @@ public:
     bool particles_are_close_very = dist_mag_closest < kCloseToTrouble;
     bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1) &&
             (prev_fast_fraction - fast_fraction > 0.1);
-    const int ll = 1;  // Limit logging to once every x lines.
+    // Make it difficult for log files to reach gigabyte sizes on long running simulation.
+    static int local_count = 0;
+    static int ll = 1;  // Limit logging to once every x lines.
+    ++local_count;
+    if (local_count > 20000000  && ll <= 16384) {
+      local_count = 0;
+      ll *= 2;
+      // std::cout << "\t\t\t\t ll " << ll << std::endl;
+    }
     if (log_count > 0 // || true
       ||  count%(ll*32) == 0
       || (count%(ll*16) == 0 && fast_fraction < 0.1)
@@ -760,10 +769,10 @@ public:
 
     assert(numParticles <= kMaxParticles);
     int divider;  // Prefer bright colors, but with many particles becomes indistinguishable.
-         if (num_particles <= 2)  divider = 2;
+         if (num_particles <= 2)  divider = 1;
     else if (num_particles <= 4)  divider = 3;
     else if (num_particles <= 6)  divider = 4;
-    else                          divider = 5;  // With more particles don't brighten as much.
+    else                          divider = 8;  // With more particles don't brighten as much.
     for (int i = 0; i < numParticles; ++i) {
       Particle* p;
       if (i < numParticles / 2) {
@@ -776,12 +785,13 @@ public:
         // p->color[2] =   0 + (std::rand() % 240);
         p->color[0] = std::rand() % 256;
         p->color[1] = std::rand() % 256;
-        p->color[2] = std::rand() % 240;
+        p->color[2] = std::rand() % 245;
         if (i == 0) {
           p->vel[1] = -1e4;
           p->pos[0] = - kBohrRadius;
           p->color[0] = 255;
-          p->color[1] = 155;
+          p->color[1] = 120;
+          p->color[2] = 120;
         }
       } else {
         pars[i] = new Proton(i);
