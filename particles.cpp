@@ -24,19 +24,19 @@ const double kCoulomb = 8987551787.3681764;       // N * m^2 / C^2
 const double kQ = 1.602176634e-19;  // Charge of a particle in Coulombs
              // Planck's constant eV*s  https://en.wikipedia.org/wiki/Planck_constant
 const double kHEv = 4.135667696E-15;
-const double kH = 6.62607015E-34;    // Planck's constant m^2 * kg / s
+// const double kH = 6.62607015E-34;    // Planck's constant m^2 * kg / s
 const double kEMassMEv =    510998.95;  // eV / c^2  https://en.wikipedia.org/wiki/Electron
 const double kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wiki/Electronvolt#Mass
 const double kEMassKg = 9.1093837015e-31;   // kg
 const double kPMassKg = 1.67262192369e-27;  // kg
 const double kBohrRadius = 5.29177210903e-11;  // Meters
 const double kBohrRadiusProton = kBohrRadius / 2;  // value = swag / trial and error
-                                               
-const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
-const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
+
+// const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
+// const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
-const int    kMaxParticles = 8;
+const int    kMaxParticles = 16;
 const int    kPFrequencySubDivisions = 16;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
@@ -67,6 +67,9 @@ std::chrono::_V2::system_clock::time_point last_log_time;
 
 class Particle {
 public:
+  const int id;            // Unique id for each particle.
+  const bool is_electron;  // Only used for logging.
+
   const double mass_mev;
   const double mass_kg;
   // mass = energy / c^2
@@ -117,19 +120,15 @@ public:
   double force_magnitude;     // Sum of all forces from all particles.
   double force_mag_closest;   // Force mag from closest attracted particle.  Only used for logging.
 
-  double magnet_fs[3];  // Sum of all magnetic forces from all particles.
-  double b_force_by_oth_vel[3];        // Force caused by others velocity.
-  double b_force_by_oth_intrinsic[3];  // Force caused by others intrinsic magnetic field.
+  double magnet_fs[3];          // Sum of all magnetic forces from all particles.
+  double b_force_by_oth_vel[3]; // Force caused by others velocity.
+  double b_f_intrinsic[3];      // Force caused by others intrinsic magnetic field.
 
   double vel[3] = {0, 0, 0};
   double vel_mag = 0;
   double vel_mag2 = 0;        // Velocity magnitude squared.
   double vel_unit_vec[3];
   double new_dt = 0;          // Global dt = smallest new dt.
-
-  // Only used for debug.  Not used in simulation calculations.
-  const int id;            // Unique id for each particle.  Just used for logging.
-  const bool is_electron;  // Only used for logging.
 
   double acceleration[3];
   // Use variable dt to avoid digital simulation errors.
@@ -160,7 +159,7 @@ public:
   volatile bool dist_calcs_done[kMaxParticles];
 
   explicit Particle(double mass_mev, double mass_kg, double avg_q, double q_amplitude,
-                    double max_speed_allowed, double max_dist_allowed,
+                    double max_dist_allowed, double max_speed_allowed,
                     int id, bool is_electron) :
           mass_mev(mass_mev), mass_kg(mass_kg), avg_q(avg_q), q_amplitude(q_amplitude),
           // Want paired particles to be at opposite ends of the sine wave.
@@ -235,7 +234,6 @@ public:
 
   double potential_energy_average;
   // Below block of variables only used in below method.
-  static const int kManyBuffersMultiplier = 32;
   double pot_energy_cycle[kPFrequencySubDivisions];
   int    pot_energy_cycle_index = 0;
   double sum_p_energy = 0;        // Only used in below method.
@@ -312,13 +310,10 @@ public:
       << " fast"  << std::setw(10) << std::setprecision(3) << fast_fraction
       << " f "    << std::setw( 9) << force_mag_closest
    // << Log3dArray(forces  , " fs")
-      << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) +
-                        pow(b_force_by_oth_vel[2], 2))
-      << " Bi " << std::setw( 9) << sqrt(pow(b_force_by_oth_intrinsic[0], 2) +
-                                         pow(b_force_by_oth_intrinsic[1], 2) +
-                                         pow(b_force_by_oth_intrinsic[2], 2))
-      << Log3dArray(b_force_by_oth_intrinsic, "Bi")
-      << Log3dArray(magnet_fs, "tB"  )
+   // << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) + pow(b_force_by_oth_vel[2], 2))
+   // << " Bi " << std::setw( 9) << sqrt(pow(b_f_intrinsic[0], 2) + pow(b_f_intrinsic[1], 2) + pow(b_f_intrinsic[2], 2))
+   // << Log3dArray(b_f_intrinsic, "Bi")
+   // << Log3dArray(magnet_fs, "tB"  )
    // << "  B "   << sqrt(magnet_fs[0]*magnet_fs[0] + magnet_fs[1]*magnet_fs[1] + magnet_fs[2]*magnet_fs[2])
    // << Log3dArray(acceleration, "a")
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
@@ -434,26 +429,28 @@ public:
   }
 
   // Calculate the magnetic force caused by:
-  // 1. particle(s) moving
-  // 2. Intrinsic magnetic field of the particles.
-  //    Not implemented yet.
+  //  1. particle(s) moving
+  //  2. Intrinsic magnetic field of the particles.
   // https://phys.libretexts.org/Bookshelves/University_Physics/Calculus-Based_Physics_(Schnick)/Volume_B%3A_Electricity_Magnetism_and_Optics/B17%3A_Magnetic_Field%3A_Causes
   // https://en.wikipedia.org/wiki/Lorentz_force
   // Calculate magnetic field at point of q1:
-  // 1. Magnetic field of q2 due to it moving
-  // 2. Magnetic field of q2 due to intrinsic magnetic field.
+  //  1. Magnetic field of q2 due to it moving
+  //  2. Magnetic field of q2 due to intrinsic magnetic field.
   // cross that with
-  // 1. Magnetic field of q1 due to it moving
-  // 2. Magnetic field of q1 due to intrinsic magnetic field.
+  //  1. Magnetic field of q1 due to it moving
+  //  2. Magnetic field of q1 due to intrinsic magnetic field.
+  // Does the magnetic field of EM wave 1 interact with the magnetic field of EM wave 2?
+  // The electric fields do, so you would think the magnetic fields should also.
   void
   MagneticForce(Particle *oth, double e_field_magnitude_oth, double q2,
-                         double *dist_vector, double dist_mag_2) {
+                         double *dist_vector, double dist_mag_2, double *dist_unit_vector) {
     // Constants for calculating magnetic force.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
-    const double kPermeability  = 4 * M_PI * 1e-7;  // T * m / A
+    // const double kPermeability  = 4 * M_PI * 1e-7;  // T * m / A
     const double kPermeabilityDividedBy4Pi = 1e-7;  // T * m / A
-
+    // Biot-Savart law.  https://en.wikipedia.org/wiki/Biot%E2%80%93Savart_law
+    // B = μ0/4π * q* (cross product of v and r) / |r|^2
     double vel_oth_cross_dis[3];
     cross(oth->vel, dist_vector, vel_oth_cross_dis);
     double b_field_by_oth_vel[3];    // Magnetic field created by other particles velocity
@@ -463,25 +460,33 @@ public:
       b_field_by_oth_vel[i] = kPermeabilityDividedBy4Pi * q2 * vel_oth_cross_dis[i] / dist_mag_2;
       assert(!std::isnan(b_field_by_oth_vel[i]));
     }
+    // Lorentz force from oth particle magnetic field = q * v x B
     double vel_cross_b_field[3];
     cross(vel, b_field_by_oth_vel, vel_cross_b_field);
     for (int i = 0; i < 3; ++i) {
-      // Lorentz force from oth particle magnetic field = q * v x B
       b_force_by_oth_vel[i] = freq_charge * vel_cross_b_field[i];
       magnet_fs[i] += b_force_by_oth_vel[i];   // Only used for logging.
     }
+    // Above we calculated the magnetic force due to moving charged particle.
+    // Below we will calculate the magnetic force due to the other particle's intrinsic magnetic field.
+
     // b = e / c
     // http://hyperphysics.phy-astr.gsu.edu/hbase/Waves/emwv.html
     // https://www.se.edu/kfrinkle/wp-content/uploads/sites/89/2013/10/main23v130303.pdf
     // Deriving E=cB and B=µ0·ε0·c·E using Maxwell's Equations: https://www.youtube.com/watch?v=dW1q8XQcEdI
     // Magnetic field created by other.
     double b_field_caused_by_intrinsic_oth_magnitude = e_field_magnitude_oth / kC;
+    double b_field_by_oth_intrinsic[3];
     for (int i = 0; i < 3; ++i) {
       // (i+1)%3 = rotate 90 degrees.
-      b_force_by_oth_intrinsic[(i+1)%3] = dist_vector[i] * b_field_caused_by_intrinsic_oth_magnitude;
+      b_field_by_oth_intrinsic[(i+1)%3] = dist_unit_vector[i] * b_field_caused_by_intrinsic_oth_magnitude;
+    }
+    cross(vel, b_field_by_oth_intrinsic, vel_cross_b_field);
+    for (int i = 0; i < 3; ++i) {
+      b_f_intrinsic[i] = freq_charge * vel_cross_b_field[i];
     }
     for (int i = 0; i < 3; ++i) {
-      magnet_fs[i] += b_force_by_oth_intrinsic[i];
+      magnet_fs[i] += b_f_intrinsic[i];
     }
     /*
     tee << " magnetic field q2 "
@@ -532,7 +537,7 @@ public:
     // Possible optimization is to calculate magnetic force in separate thread.
     // Another possibility is to skip it or use cached values,
     // it doesn't change significantly, since it is negligible / insignificant.
-    MagneticForce(oth, e_field_magnitude_oth, other_charge, dist, dist_magn2);
+    MagneticForce(oth, e_field_magnitude_oth, other_charge, dist, dist_magn2, dist_unit_vector);
 
     for (int i = 0; i < 3; ++i) {
       forces[i] += eforce[i] + magnet_fs[i];
@@ -643,22 +648,23 @@ public:
     bool force_same_dir_as_v = dis_vel_dot_prod < -0.75;    // -0.75 = guess
     if (!force_same_dir_as_v) return;
 
-    if (num_particles_ > 2)
-    close->log_prev_log_lines(2);
-           log_prev_log_lines();
-    tee << "\t Force too high. " << (is_electron ? "e" : "p") << id << "  dot product " << dis_vel_dot_prod
-        << "  f mag " << force_magnitude
+    close->log_prev_log_lines(1);
+           log_prev_log_lines( );
+    tee << "\t Teleporting because force too high. " << (is_electron ? "e" : "p") << id
+        << "  distance velocity dot product " << dis_vel_dot_prod
+        << "  force magnitude " << force_magnitude
         << " x " << forces[0] << " y " << forces[1] << " z " << forces[2] << std::endl;
-    tee << "\t\t\t velocity unit vector: " << vel_unit_vec[0]
-                                  << " y " << vel_unit_vec[1]
-                                 << " "    << vel_unit_vec[2]
-        << "\t distance unit vector: " << dist_unit_vec[0]
+    tee << " velocity unit vector: x " << vel_unit_vec[0]
+                              << " y " << vel_unit_vec[1]
+                              << " z " << vel_unit_vec[2]
+        << " distance unit vector: x " << dist_unit_vec[0]
                               << " y " << dist_unit_vec[1]
-                              << " "   << dist_unit_vec[2] << std::endl;
-    tee << "  Dist " << dist_mag_closest << "  Teleporting to other side of "
+                              << " z " << dist_unit_vec[2] << std::endl;
+    tee << "  Dist " << dist_mag_closest << " x " << dist_closest[0] << " y " << dist_closest[1] << " z " << dist_closest[2]
+        << "  Teleporting to other side of "
         << (close->is_electron ? "electron" : "proton")
-        << ".  pos " << pos[0] << " " << pos[1] << " " << pos[2]
-        << "  close pos " << close->pos[0] << " " << close->pos[1] << " " << close->pos[2]
+        << ".  Position " << pos[0] << " " << pos[1] << " " << pos[2]
+        << "  proton pos x " << close->pos[0] << " y " << close->pos[1] << " z " << close->pos[2]
         << std::endl;
     // Teleport the particle to other side of the close by particle.
     for (int i = 0; i < 3; ++i) {
@@ -666,10 +672,10 @@ public:
     }
     tee << "\t Teleported to " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
     v_when_teleported = vel_mag;
-    log_count = 8;               // Force extra logging after this event.
+    log_count = 4;               // Force extra logging after this event.
     close->log_file << "\t\t\t" << (is_electron ? "e" : "p") << id << " teleported "  << std::endl;
-    if (num_particles_ > 2)
-      close->log_count = 2;          // Force extra logging for other particle.
+    // if (num_particles_ > 2)
+    close->log_count = 2;          // Force extra logging for other particle.
   }
 
   void ApplyForcesToParticle() {
@@ -765,11 +771,17 @@ public:
         p = pars[i];
         // Set pseudo random colors.  Electrons tend to be more red.  Protons tend to be more blue.
         // Prefer bright colors over dark colors.
-        p->color[0] = 151 + (std::rand() % 105);
-        p->color[1] = 100 + (std::rand() % 155);
-        p->color[2] =   0 + (std::rand() % 240);
+        // p->color[0] = 151 + (std::rand() % 105);
+        // p->color[1] =  51 + (std::rand() % 155);
+        // p->color[2] =   0 + (std::rand() % 240);
+        p->color[0] = std::rand() % 256;
+        p->color[1] = std::rand() % 256;
+        p->color[2] = std::rand() % 240;
         if (i == 0) {
+          p->vel[1] = -1e4;
           p->pos[0] = - kBohrRadius;
+          p->color[0] = 255;
+          p->color[1] = 155;
         }
       } else {
         pars[i] = new Proton(i);
@@ -777,6 +789,7 @@ public:
         p->color[0] =   0 + (std::rand() % 210);
         p->color[1] =   0 + (std::rand() % 240);
         p->color[2] = 151 + (std::rand() % 105);
+        p->vel[1] = 1e4;
       }
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " " << int(p->color[2]);
@@ -784,7 +797,7 @@ public:
       for (int j = 0; j < 3; ++j) {
         if (num_particles > 2) {
           // Set random locations
-          p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.9) * kBohrRadiusProton;
+          p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.5) * kBohrRadiusProton;
         }
         // Increase brightness
         int increase = p->color[j] / divider;
@@ -882,7 +895,7 @@ public:
       pars[i]->CheckForEscape();
     }
     // Do until we get significant movement, then wait for screen draw.
-    for (int iter = 0; iter<4096 && !screen_draw_event_occurred; ++iter) {
+    for (int iter = 0; iter<(4096*2) && !screen_draw_event_occurred; ++iter) {
       for (int i = 0; i < num_particles; ++i) {
         Particle * wave_ptr = pars[i];
         wave_ptr->freq_charge = wave_ptr->GetSinusoidalChargeValue();
