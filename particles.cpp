@@ -867,7 +867,7 @@ public:
         potential_energy_all_w += kCoulomb * w1->freq_charge * w2->freq_charge / w1->dist_mag[j];
       }
       // If the electron is interesting because it is close to a proton than give it preferential logging.
-      if (w1->is_electron && w1->dist_mag_closest < kCloseToTrouble*4
+      if (w1->is_electron && w1->dist_mag_closest < kCloseToTrouble*2
        && w1->dist_mag_closest < closest) {
         closest = w1->dist_mag_closest;
         w_to_log_id = w1->id;
