@@ -31,6 +31,13 @@ const double kEMassKg = 9.1093837015e-31;   // kg
 const double kPMassKg = 1.67262192369e-27;  // kg
 const double kBohrRadius = 5.29177210903e-11;  // Meters
 const double kBohrRadiusProton = kBohrRadius / 2;  // value = swag / trial and error
+const double kLithiumAtomSize = 152e-12;  // 152 picometers
+// The nuclear radius (r) can be estimated using the formula r = r0 * A^(1/3),
+// where r0 is approximately 1.2 femtometers (fm) and 
+// A is the mass number of the nucleus (protons + neutrons).
+// https://en.wikipedia.org/wiki/Nuclear_radius
+// 
+
 
 // const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
 // const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
