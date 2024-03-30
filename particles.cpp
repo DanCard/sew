@@ -36,8 +36,6 @@ const double kLithiumAtomSize = 152e-12;  // 152 picometers
 // where r0 is approximately 1.2 femtometers (fm) and 
 // A is the mass number of the nucleus (protons + neutrons).
 // https://en.wikipedia.org/wiki/Nuclear_radius
-// 
-
 
 // const double kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
 // const double kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
@@ -323,14 +321,14 @@ public:
       << std::scientific << std::setprecision(2)
       << (dt < (kShortDt*0.9) ? " *" : "  ")
       << "dt"     << std::setw( 9) << dt // << " new " << new_dt
-      << " fast"  << std::setw(10) << std::setprecision(3) << fast_fraction
+      << " fast"  << std::setw(10) << std::setprecision(3) << fast_fraction << std::setprecision(2)
       << " f "    << std::setw( 9) << force_mag_closest
    // << Log3dArray(forces  , " fs")
-   // << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) + pow(b_force_by_oth_vel[2], 2))
-   // << " Bi " << std::setw( 9) << sqrt(pow(b_f_intrinsic[0], 2) + pow(b_f_intrinsic[1], 2) + pow(b_f_intrinsic[2], 2))
-   // << Log3dArray(b_f_intrinsic, "Bi")
+      << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) + pow(b_force_by_oth_vel[2], 2))
+      << " Bi " << std::setw( 9) << sqrt(pow(b_f_intrinsic[0], 2) + pow(b_f_intrinsic[1], 2) + pow(b_f_intrinsic[2], 2))
+      << Log3dArray(b_f_intrinsic, "Bi")
    // << Log3dArray(magnet_fs, "tB"  )
-   // << "  B "   << sqrt(magnet_fs[0]*magnet_fs[0] + magnet_fs[1]*magnet_fs[1] + magnet_fs[2]*magnet_fs[2])
+      << "  B "   << sqrt(magnet_fs[0]*magnet_fs[0] + magnet_fs[1]*magnet_fs[1] + magnet_fs[2]*magnet_fs[2])
    // << Log3dArray(acceleration, "a")
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
    // << Log3dArray(pos_change_3d, "chng") << std::setprecision(1)
@@ -912,7 +910,7 @@ public:
       pars[i]->CheckForEscape();
     }
     // Do until we get significant movement, then wait for screen draw.
-    for (int iter = 0; iter<(4096*2) && !screen_draw_event_occurred; ++iter) {
+    for (int iter = 0; iter<(1024) && !screen_draw_event_occurred; ++iter) {
       for (int i = 0; i < num_particles; ++i) {
         Particle * wave_ptr = pars[i];
         wave_ptr->freq_charge = wave_ptr->GetSinusoidalChargeValue();
