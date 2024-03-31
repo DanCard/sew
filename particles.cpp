@@ -42,7 +42,8 @@ const double kLithiumAtomSize = 152e-12;  // 152 picometers
 const double kEFrequency = kEMassMEv / kHEv;
 const double kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 16;
-const int    kPFrequencySubDivisions = 16;
+// For increased speed avoid lowering.  Instead increase threading.
+const int    kPFrequencySubDivisions = 128;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
 const double kShortDt = 1 / ( kPFrequency * kPFrequencySubDivisions );
@@ -61,13 +62,25 @@ const double kCloseToTrouble = 2.3e-13;
 const double kForceTooHigh = 0.3;  // 0.3 from trial and error.
 const bool   kHoldingProtonSteady = false;  // Don't move the proton(s).
 
+
 // Global variables
+int num_particles_ = 0;
+
 // Delta time in seconds.
 double dt = kLongDt;   // Hopefully particles are far enough apart to use long dt.
 double time_ = 0;
-int count = 0;         // Invocation count of moving particles.
+int    count = 0;         // Invocation count of moving particles.
+double total_potential_energy = 0;
+double total_kinetic_energy = 0;
+double total_energy = 0;    // Total energy of all particles = potential energy + kinetic energy
+// Energy of all particles when we had an escape.  Above this energy we start dissipating energy.
+double total_energy_escape = 0;
+double potential_energy_average;
 
-int num_particles_ = 0;
+double pot_energy_cycle[kPFrequencySubDivisions];
+int    pot_energy_cycle_index = 0;
+double sum_p_energy = 0;        // Only used in below method.
+
 std::chrono::_V2::system_clock::time_point last_log_time;
 
 class Particle {
@@ -89,7 +102,7 @@ public:
   const double q_amplitude;   // Amplitude of charge.  Set to e = kQ
 
   // initial charge ?= (static_cast<double>(rand()) / RAND_MAX) * 2 * M_PI; // NOLINT(*-msc50-cpp)
-  // See GetSinusoidalChargeValue for how this is used:
+  // See ChargeSinusoidal for how this is used:
   // return avg_q + (q_amplitude * sin((frequency * time_ * 2 * M_PI) + initial_charge));
   // Want paired particles to be at opposite ends of the sine wave.
   // In other words to be a half cycle away.
@@ -97,7 +110,7 @@ public:
   const double initial_charge;
   double freq_charge;
 
-  double pos[3] = {0, 0, 0};  // Position
+  double pos[3] = {0, 0, 0};   // Position
   double pos_change_3d[3];     // Change in position.
   double pos_change_magnitude;
 
@@ -140,10 +153,12 @@ public:
   // Fast fraction informs were we are in the dt range between long and short.
   double fast_fraction = 0;  // Percent we are between long dt and short dt.
 
-  // Used for logging to determine of electron is coming or going relative to closest proton.
+  // Determine if electron is coming or going relative to closest proton.
   double       dis_vel_dot_prod;
   double       dis_vel_dot_prod_old;
-  bool flipped_dis_vel_dot_prod = false;
+  bool flipped_dis_vel_dot_prod = false;  // If true then log
+  bool energy_dissipated = false;      // When leaving proton, dissipate energy.
+  bool energy_dissipated_prev = false;  // When different from energy_dissipated, then log.
 
   // std::ofstream log_file;
   // TeeLogger logger("log.txt");
@@ -159,13 +174,15 @@ public:
   std::vector<std::string> prev_log_lines = std::vector<std::string>(kMaxPrevLogLines);
   int    prev_log_line_index = 0;
   unsigned char color[3];
-  double total_kinetic_e_all_w = 0;
 
   volatile bool dist_calcs_done[kMaxParticles];
 
-  explicit Particle(double mass_mev, double mass_kg, double avg_q, double q_amplitude,
-                    double max_dist_allowed, double max_speed_allowed,
-                    int id, bool is_electron) :
+  explicit Particle(int id, bool is_electron,
+                    double mass_mev, double mass_kg, double avg_q, double q_amplitude,
+                    double max_dist_allowed, double max_speed_allowed
+                    ) :
+          id(id),
+          is_electron(is_electron),
           mass_mev(mass_mev), mass_kg(mass_kg), avg_q(avg_q), q_amplitude(q_amplitude),
           // Want paired particles to be at opposite ends of the sine wave.
           // In other words to be a half cycle away.
@@ -173,8 +190,6 @@ public:
           initial_charge(id%2 == 0 ? 0 : M_PI),
           max_dist_allow(max_dist_allowed),
           max_speed_allow(max_speed_allowed),
-          id(id),
-          is_electron(is_electron),
           logger(is_electron ? ("e" + std::to_string(id) + ".log")
                               : "p" + std::to_string(id) + ".log"), tee(logger.get_stream())
   {
@@ -237,22 +252,6 @@ public:
   }
 
 
-  double potential_energy_average;
-  // Below block of variables only used in below method.
-  double pot_energy_cycle[kPFrequencySubDivisions];
-  int    pot_energy_cycle_index = 0;
-  double sum_p_energy = 0;        // Only used in below method.
-
-  void CalcAveragePotentialEnergy() {
-    sum_p_energy += pot_energy_cycle[pot_energy_cycle_index++];
-    pot_energy_cycle_index = pot_energy_cycle_index % kPFrequencySubDivisions;
-    // Subtract the potential energy that is going to roll off our average.
-    sum_p_energy -= pot_energy_cycle[pot_energy_cycle_index];
-    // -1 because of the buffer subtracted above.
-    potential_energy_average = sum_p_energy / (kPFrequencySubDivisions - 1);
-  }
-  
-
   void ConsiderLoggingToFile(int num_drawing_event_already, int num_wait_for_drawing_event) {
     double danger_speed = max_speed_allow / 2;
 
@@ -263,8 +262,7 @@ public:
     // Make it difficult for log files to reach gigabyte sizes on long running simulation.
     static int local_count = 0;
     static int ll = 1;  // Limit logging to once every x lines.
-    ++local_count;
-    if (local_count > 20000000  && ll <= 16384) {
+    if (++local_count > 20000000  && ll <= 16384) {
       local_count = 0;
       ll *= 2;
       // std::cout << "\t\t\t\t ll " << ll << std::endl;
@@ -299,36 +297,30 @@ public:
     }
   }
 
+  // A bit of a mess because we have particle data and particles(system) data that we are logging.
   std::string FormatLogLine(int num_drawing_event_already, int num_wait_for_drawing_event) {
     double charge_of_closest = p_closest_attracted->freq_charge;
-    double total_energy = potential_energy_average + total_kinetic_e_all_w;
 
-    if (dt < kShortDt*0.9) {
-      if (dt < kShortDt / 3 ) {
-        std::cout << "dt " << dt << " is too short.  " << std::endl;
-      }
-    }
     std::ostringstream log_line;
     log_line
-      << std::setw( 7) << count <<   (is_electron ? " e" : " p") << id
+      << std::setw( 8) << count <<   (is_electron ? " e" : " p") << id
       << "⋅" << (p_closest_attracted->is_electron ? "e" : "p") << p_closest_attracted_id
       << std::scientific << std::setprecision(3)
       << "  dis"  << std::setw(10) << dist_mag_closest
       << "  vel " << std::setw(10) << vel_mag
    // << Log3dArray(vel, "v")
-      << std::fixed << std::setprecision(1)
-      << "  d⋅v " << std::setw( 4) << dis_vel_dot_prod    // -1 = approaching, 1 = leaving
+      << (energy_dissipated ? " *" : "  ") << std::fixed << std::setprecision(1)
+      << "d⋅v " << std::setw( 4) << dis_vel_dot_prod    // -1 = approaching, 1 = leaving
       << std::scientific << std::setprecision(2)
-      << (dt < (kShortDt*0.9) ? " *" : "  ")
-      << "dt"     << std::setw( 9) << dt // << " new " << new_dt
+      << "  dt"   << std::setw( 9) << dt // << " new " << new_dt
       << " fast"  << std::setw(10) << std::setprecision(3) << fast_fraction << std::setprecision(2)
       << " f "    << std::setw( 9) << force_mag_closest
    // << Log3dArray(forces  , " fs")
-      << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) + pow(b_force_by_oth_vel[2], 2))
-      << " Bi " << std::setw( 9) << sqrt(pow(b_f_intrinsic[0], 2) + pow(b_f_intrinsic[1], 2) + pow(b_f_intrinsic[2], 2))
-      << Log3dArray(b_f_intrinsic, "Bi")
+   // << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) + pow(b_force_by_oth_vel[2], 2))
+   // << " Bi " << std::setw( 9) << sqrt(pow(b_f_intrinsic[0], 2) + pow(b_f_intrinsic[1], 2) + pow(b_f_intrinsic[2], 2))
+   // << Log3dArray(b_f_intrinsic, "Bi")
    // << Log3dArray(magnet_fs, "tB"  )
-      << "  B "   << sqrt(magnet_fs[0]*magnet_fs[0] + magnet_fs[1]*magnet_fs[1] + magnet_fs[2]*magnet_fs[2])
+   // << "  B "   << sqrt(magnet_fs[0]*magnet_fs[0] + magnet_fs[1]*magnet_fs[1] + magnet_fs[2]*magnet_fs[2])
    // << Log3dArray(acceleration, "a")
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
    // << Log3dArray(pos_change_3d, "chng") << std::setprecision(1)
@@ -344,7 +336,7 @@ public:
       // P energy goes negative, that is why width is larger.
       << "  pe"   << std::setw(10) << potential_energy_average
    // << " "      << std::setw( 8) << p_energy_many_average
-      << " ke"    << std::setw( 9) << total_kinetic_e_all_w
+      << " ke"    << std::setw( 9) << total_kinetic_energy
       << " te"    << std::setw( 9) << total_energy
       << " L "    << std::setw( 2) << num_drawing_event_already   // Late.  Drawing event already occurred.
       << " E "    << std::setw( 2) << num_wait_for_drawing_event  // Calcs were early.  Waited on drawing event.
@@ -364,7 +356,9 @@ public:
     tee << "\t" << (is_electron ? "electron" : "proton")
         << " escaped past radius of " << max_dist_allow
         << "  Dist mag from origin : " << distance_mag_from_origin
-        << "  Current velocity " << vel[0] << " " << vel[1] << " " << vel[2];
+        << "  Current velocity " << sqrt(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2])
+        << "  x " << vel[0] << " y " << vel[1] << " z " << vel[2]
+        << "  total energy " << total_energy;
     if (v_when_teleported > 0) {
         tee << "  V when previously teleported: " << v_when_teleported;
     }
@@ -382,6 +376,9 @@ public:
     for (double & v : vel) v = 0;
     log_count = 2;  // Force logging around this event.
     tee << std::endl;
+    if (total_energy_escape == 0) {
+      total_energy_escape = total_energy;
+    }
   }
 
   void CheckForEscape() {
@@ -396,7 +393,7 @@ public:
 
 
   // Get the charge that is based on freq and thus time.
-  double GetSinusoidalChargeValue() const {
+  double ChargeSinusoidal() const {
     // if dt > 0.25 / frequency, then charge is constant.
     // Can't simulate sinusoidal charge when dt is large.
     /*
@@ -430,6 +427,7 @@ public:
     dist_mag_closest  = 1;      // 1 represents a large number that will be overwritten
                                 // quickly when checking for closest.
     p_closest_attracted = nullptr;
+    energy_dissipated = false;
     for (double & force : forces) {
       force = 0;
     }
@@ -447,7 +445,7 @@ public:
   //  2. Intrinsic magnetic field of the particles.
   // https://phys.libretexts.org/Bookshelves/University_Physics/Calculus-Based_Physics_(Schnick)/Volume_B%3A_Electricity_Magnetism_and_Optics/B17%3A_Magnetic_Field%3A_Causes
   // https://en.wikipedia.org/wiki/Lorentz_force
-  // Calculate magnetic field at point of q1:
+  // Calculate magnetic field at q1 from q2:
   //  1. Magnetic field of q2 due to it moving
   //  2. Magnetic field of q2 due to intrinsic magnetic field.
   // cross that with
@@ -461,10 +459,9 @@ public:
     // Constants for calculating magnetic force.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
-    // const double kPermeability  = 4 * M_PI * 1e-7;  // T * m / A
     const double kPermeabilityDividedBy4Pi = 1e-7;  // T * m / A
     // Biot-Savart law.  https://en.wikipedia.org/wiki/Biot%E2%80%93Savart_law
-    // B = μ0/4π * q* (cross product of v and r) / |r|^2
+    // B = μ0/4π * q * (cross product of v and r) / |r|^2
     double vel_oth_cross_dis[3];
     cross(oth->vel, dist_vector, vel_oth_cross_dis);
     double b_field_by_oth_vel[3];    // Magnetic field created by other particles velocity
@@ -475,10 +472,10 @@ public:
       assert(!std::isnan(b_field_by_oth_vel[i]));
     }
     // Lorentz force from oth particle magnetic field = q * v x B
-    double vel_cross_b_field[3];
-    cross(vel, b_field_by_oth_vel, vel_cross_b_field);
+    double v_cross_b_field_oth_v[3];
+    cross(vel, b_field_by_oth_vel, v_cross_b_field_oth_v);
     for (int i = 0; i < 3; ++i) {
-      b_force_by_oth_vel[i] = freq_charge * vel_cross_b_field[i];
+      b_force_by_oth_vel[i] = freq_charge * v_cross_b_field_oth_v[i];
       magnet_fs[i] += b_force_by_oth_vel[i];   // Only used for logging.
     }
     // Above we calculated the magnetic force due to moving charged particle.
@@ -492,12 +489,14 @@ public:
     double b_field_caused_by_intrinsic_oth_magnitude = e_field_magnitude_oth / kC;
     double b_field_by_oth_intrinsic[3];
     for (int i = 0; i < 3; ++i) {
-      // (i+1)%3 = rotate 90 degrees.
+      // (i+1)%3 = rotate 90 degrees.  To do: Figure out correct way of doing this.
       b_field_by_oth_intrinsic[(i+1)%3] = dist_unit_vector[i] * b_field_caused_by_intrinsic_oth_magnitude;
     }
-    cross(vel, b_field_by_oth_intrinsic, vel_cross_b_field);
+    double vel_cross_b_field_intrinsic[3];
+    cross(vel, b_field_by_oth_intrinsic, vel_cross_b_field_intrinsic);
     for (int i = 0; i < 3; ++i) {
-      b_f_intrinsic[i] = freq_charge * vel_cross_b_field[i];
+      // Lorentz force from oth particle magnetic field = q * v x B
+      b_f_intrinsic[i] = freq_charge * vel_cross_b_field_intrinsic[i];
     }
     for (int i = 0; i < 3; ++i) {
       magnet_fs[i] += b_f_intrinsic[i];
@@ -630,14 +629,19 @@ public:
     }
     *fast_fraction_ptr = fast_fraction;
     new_dt = kLongDt + ((kShortDt - kLongDt) * inverse_exponential);
-    // bool heading_away = is_electron ? dis_vel_dot_prod >= 0 : dis_vel_dot_prod <= 0;
-    // Trouble with energy gain.  To compensate lower simulation speed, increase accuracy
-    // when leaving close proton.  Decrease dt so that we can lower speed as much as was gained coming
-    // in.  Hack to limit problem of energy gain.
-    if (dist_mag_closest < (kSmallDtDistance*32) && dis_vel_dot_prod >= 0 && is_electron) {
-      // new_dt = new_dt / 2;
+    // Dissipate energy when heading away.
+    if (dis_vel_dot_prod >= 0 && is_electron) {
+      // new_dt = new_dt / 4;  // Combat energy gain.
       if (dis_vel_dot_prod_old < 0) {
-        flipped_dis_vel_dot_prod = true;
+        flipped_dis_vel_dot_prod = true;  // If true then log
+      } else if (total_energy_escape != 0
+       && total_energy > total_energy_escape
+       && dist_mag_closest > kCloseToTrouble) {
+        energy_dissipated_prev = energy_dissipated;
+        energy_dissipated      = true;
+        for (int i = 0; i < 3; ++i) {
+          vel[i] *= 0.9999;  // Combat energy gain.
+        }
       }
     }
   }
@@ -735,16 +739,16 @@ public:
 
 class Electron : public Particle {
 public:
-  explicit Electron(int id) : Particle(kEMassMEv, kEMassKg, -kQ, -kQ,
-   kBohrRadius * 2, kMaxSpeedElectron, id, true) {}
+  explicit Electron(int id) : Particle(id, true, kEMassMEv, kEMassKg, -kQ, -kQ,
+   kBohrRadius * 2, kMaxSpeedElectron) {}
 };
 
 class Proton : public Particle {
 public:
   // amplitude = kQ * kBohrMagneton / kProtonMagneticMoment = guess / theory.
   // Could amplitude be kQ?
-  explicit Proton(int id) : Particle(kPMassMEv, kPMassKg, kQ, kQ,
-   kBohrRadiusProton, kMaxSpeedProton, id, false) {}
+  explicit Proton(int id) : Particle(id, false, kPMassMEv, kPMassKg, kQ, kQ,
+   kBohrRadiusProton, kMaxSpeedProton) {}
 };
 
 
@@ -830,62 +834,74 @@ public:
   // Log a particle and misc info.
   void LogStuff(Particle* w) {
     // Log based on time interval to console.
-    if (w_to_log_id == w->id || w->log_count > 0 || w->flipped_dis_vel_dot_prod) {
-      auto now = std::chrono::system_clock::now(); // Get current time and see if we logged more than xxx milliseconds ago.
-      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time);
-      if (w->log_count > 0 || duration.count() > 800 || w->flipped_dis_vel_dot_prod) {
-        w->SetColorForConsole();
-        if (w->flipped_dis_vel_dot_prod) {
-          w->log_prev_log_lines(1);
-        }
-        std::string log_line_str = w->FormatLogLine(num_drawing_event_already,
-                                                    num_wait_for_drawing_event);
-        num_drawing_event_already  = 0;
-        num_wait_for_drawing_event = 0;
-        w->tee << log_line_str << std::endl;
-        last_log_time = now;
-        w_to_log_id = (w_to_log_id + 1) % (num_particles_ / 2);   // Divide by 2 to skip logging protons to screen.
-        w->log_count--;
-        w->logToBuffer(log_line_str);
-        return;
+    auto now = std::chrono::system_clock::now();
+    bool do_log = w->log_count > 0
+               || w->energy_dissipated_prev != w->energy_dissipated
+               || w->flipped_dis_vel_dot_prod;
+    if (do_log || (w_to_log_id == w->id && std::chrono::duration_cast<std::chrono::milliseconds>(
+        now - last_log_time).count() > 1000)) {
+      w->SetColorForConsole();
+      if (w->flipped_dis_vel_dot_prod) {
+        w->log_prev_log_lines(1);
       }
+      std::string log_line_str = w->FormatLogLine(num_drawing_event_already,
+                                                  num_wait_for_drawing_event);
+      num_drawing_event_already  = 0;
+      num_wait_for_drawing_event = 0;
+      w->tee << log_line_str << std::endl;
+      last_log_time = now;
+      w_to_log_id = (w_to_log_id + 1) % num_particles;   // Divide by 2 to skip logging protons to screen.
+      w->log_count--;
+      w->logToBuffer(log_line_str);
+      return;
     }
     // Didn't log to screen so consider logging to just file.
     w->ConsiderLoggingToFile(num_drawing_event_already, num_wait_for_drawing_event);
   }
 
+  // Potential energy changes because of sinusoidal charge frequency.
+  void CalcAveragePotentialEnergy() {
+    sum_p_energy += pot_energy_cycle[pot_energy_cycle_index++];
+    pot_energy_cycle_index = pot_energy_cycle_index % kPFrequencySubDivisions;
+    // Subtract the potential energy that is going to roll off our average.
+    sum_p_energy -= pot_energy_cycle[pot_energy_cycle_index];
+    // -1 because of the value subtracted above.
+    potential_energy_average = sum_p_energy / (kPFrequencySubDivisions - 1);
+  }
 
   void CalcEnergyAndLog() {
     // Calculate potential energy.
-    double potential_energy_all_w = 0;
-    double total_kinetic_e_all_w = 0;
+    total_potential_energy = 0;
+    total_kinetic_energy = 0;
     double closest = 1;  // meters.  Just setting to a large number.
 
     // Potential energy = sum of all potential energies.
     // Set the potential energy for each pair of particles.
     for (int i = 0; i < num_particles; ++i) {
-      Particle* w1 = pars[i];
-      total_kinetic_e_all_w += 0.5 * w1->mass_kg * w1->vel_mag2;
-      for (int j = i+1; j < num_particles; ++j) {
-        Particle* w2 = pars[j];
+      Particle *w1 = pars[i];   // Wave 1
+      total_kinetic_energy += 0.5 * w1->mass_kg * w1->vel_mag2;
+      for (int j = i + 1; j < num_particles; ++j) {
+        Particle *w2 = pars[j];   // Wave 2
         assert(w1->dist_mag[j] != 0);
-        potential_energy_all_w += kCoulomb * w1->freq_charge * w2->freq_charge / w1->dist_mag[j];
+        total_potential_energy += kCoulomb * w1->freq_charge * w2->freq_charge / w1->dist_mag[j];
       }
       // If the electron is interesting because it is close to a proton than give it preferential logging.
-      if (w1->is_electron && w1->dist_mag_closest < kCloseToTrouble*2
-       && w1->dist_mag_closest < closest) {
+      if (w1->is_electron && w1->dist_mag_closest < kCloseToTrouble
+          && w1->dist_mag_closest < closest) {
         closest = w1->dist_mag_closest;
         w_to_log_id = w1->id;
       }
     }
+
+    pot_energy_cycle[pot_energy_cycle_index] = total_potential_energy;
+    pot_energy_cycle_index = (pot_energy_cycle_index + 1) % kPFrequencySubDivisions;
+    // Potential energy changes because of sinusoidal charge frequency.
+    // Alternatively could just use average charge.
+    CalcAveragePotentialEnergy();
+    total_energy = potential_energy_average + total_kinetic_energy;
+
     for (int i = 0; i < num_particles; ++i) {
-      // w = wave.  Don't use p because it is confusing with p for potential energy.
-      Particle* w = pars[i];
-      w->pot_energy_cycle[w->pot_energy_cycle_index] = potential_energy_all_w;
-      w->pot_energy_cycle_index = (w->pot_energy_cycle_index + 1) % kPFrequencySubDivisions;
-      w->total_kinetic_e_all_w = total_kinetic_e_all_w;
-      w->CalcAveragePotentialEnergy();
-      LogStuff(w);
+      LogStuff(pars[i]);
     }
   }
 
@@ -910,10 +926,10 @@ public:
       pars[i]->CheckForEscape();
     }
     // Do until we get significant movement, then wait for screen draw.
-    for (int iter = 0; iter<(1024) && !screen_draw_event_occurred; ++iter) {
+    for (int iter = 0; iter<(4096 * 2) && !screen_draw_event_occurred; ++iter) {
       for (int i = 0; i < num_particles; ++i) {
         Particle * wave_ptr = pars[i];
-        wave_ptr->freq_charge = wave_ptr->GetSinusoidalChargeValue();
+        wave_ptr->freq_charge = wave_ptr->ChargeSinusoidal();
         for (int j = 0; j < num_particles; ++j) {
           wave_ptr->dist_calcs_done[j] = false;
         }
