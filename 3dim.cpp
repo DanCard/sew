@@ -17,7 +17,7 @@
 #include <thread>
 
 #include "arcball/ArcBall.h"
-#include "particles.cpp"
+#include "atom.h"
 
 namespace Magnum { namespace Examples {
 
@@ -53,7 +53,7 @@ public:
 
 
 protected:
-  Particles atom = Particles(0);  // Stupid initialization because of compiler error.
+  sew::Atom atom = sew::Atom(0);  // Stupid initialization because of compiler error.
   UnsignedInt numSpheres;  // Number of subatomic particles to simulate in the atom.
   void viewportEvent(ViewportEvent& event) override;      // Handle window resize
   void keyPressEvent(KeyEvent& event) override;
@@ -156,13 +156,13 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   _spherePositions = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereVelocities = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereInstanceData = Containers::Array<SphereInstanceData>{NoInit, numSpheres};
-  atom = Particles(numSpheres);
+  atom = sew::Atom(numSpheres);
   _spherePositions[0] = Vector3{
       static_cast<float>(atom.pars[0]->pos[0] / kScale),
       static_cast<float>(atom.pars[0]->pos[1] / kScale),
       static_cast<float>(atom.pars[0]->pos[2] / kScale)};
   for (int i=0; i<numSpheres; i++) {
-    Particle *p = atom.pars[i];
+    sew::Particle *p = atom.pars[i];
     _sphereInstanceData[i].color = Color4{(float)p->color[0]/255,
                                           (float)p->color[1]/255,
                                           (float)p->color[2]/255,
@@ -170,7 +170,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
-    auto sphere_radius = (p->is_electron || numSpheres <= 4 ? 1 : 1.5) * _sphereRadius;
+    float sphere_radius = (p->is_electron || numSpheres <= 4 ? 1 : 1.5) * _sphereRadius;
     _sphereInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[i]) *
                                                   Matrix4::scaling(Vector3{sphere_radius}) * 3;
     _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();

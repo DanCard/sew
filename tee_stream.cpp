@@ -1,3 +1,6 @@
+#ifndef TEE_STREAM_CPP
+#define TEE_STREAM_CPP
+
 #include <iostream>
 #include <fstream>
 #include <streambuf>
@@ -56,8 +59,8 @@ private:
 Example usage:
 
 int main() {
-    TeeLogger logger("log.txt");
-    std::ostream& log_stream = logger.get_stream();
+    TeeLogger tee_logger("log.txt");
+    std::ostream& log_stream = tee_logger.get_stream();
 
     // This message will go to both std::cout and log.txt
     log_stream << "Hello, world!" << std::endl;
@@ -66,3 +69,4 @@ int main() {
 }
 
 */
+#endif

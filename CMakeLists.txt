@@ -20,14 +20,28 @@ find_package(Magnum REQUIRED
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 
 add_executable(test-particles
-    particles.cpp
-    test_particles.cpp)
+    atom.h
+    atom.cpp
+    constants.h
+    logger.h
+    logger.cpp
+    particle.h
+    particle.cpp
+    test_particles.cpp
+    )
 
 add_executable(3dim WIN32
     3dim.cpp
-    particles.cpp
+    atom.h
+    atom.cpp
+    constants.h
+    logger.h
+    logger.cpp
+    particle.h
+    particle.cpp
     arcball/ArcBall.cpp
     )
+
 target_link_libraries(3dim PRIVATE
     Corrade::Main
     Magnum::Application

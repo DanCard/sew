@@ -1,4 +1,7 @@
-#include "particles.cpp"
+#include <cassert>
+#include "particle.h"
+
+namespace sew {
 
 static void testDummiesInverseExponential() {
   double result1 = Particle::dummiesInverseExponential(0.5);
@@ -35,7 +38,7 @@ static void testDummiesInverseExponential() {
 
   double result8 = Particle::dummiesInverseExponential(0.0011);
   std::cout << "\t fast = 0.11%  inverse: " << result8 << std::endl;
-  assert(result8 = 0.999989);  // Is it correct?
+  assert(result8 == 0.999989);  // Is it correct?
 
   double result9 = Particle::dummiesInverseExponential(0.001);
   std::cout << "\t fast = 0.1%  inverse: " << result9 << std::endl;
@@ -44,7 +47,10 @@ static void testDummiesInverseExponential() {
   // Add more test cases as needed...
 }
 
+  
+}
+
 int main() {
-  testDummiesInverseExponential();
+  sew::testDummiesInverseExponential();
   return 0;
 }
