@@ -169,7 +169,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     _sphereInstanceData[i].color = Color4{(float)p->color[0]/255,
                                           (float)p->color[1]/255,
                                           (float)p->color[2]/255,
-                                           0.5f};
+                                          i > numSpheres/2 ? 0.35f : 0.75f};
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
@@ -285,16 +285,17 @@ void ThreeDim::viewportEvent(ViewportEvent& event) {
 }
 
 void ThreeDim::keyPressEvent(KeyEvent& event) {
-    if(event.key() == KeyEvent::Key::O) {
+    if(event.key() == KeyEvent::Key::E) {
+        atom->EnergyLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::O) {
         if(_profiler.isEnabled()) _profiler.enable();
-
     } else if(event.key() == KeyEvent::Key::P) {
         if(_profiler.isEnabled()) _profiler.disable();
         else _profiler.enable();
-
     } else if(event.key() == KeyEvent::Key::R) {
         _arcballCamera->reset();
-
+    } else if(event.key() == KeyEvent::Key::V) {
+        atom->VelocityLoggingToggle();
     } else if(event.key() == KeyEvent::Key::Space) {
         _animation ^= true;
 

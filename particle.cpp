@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <cmath>   // For M_PI constant and other match functions such as round.
-#include <fstream>
 #include <iostream>
 #include <string>
 // #include <thread>
@@ -35,9 +34,6 @@ Particle::Particle(int id, bool is_electron, Atom* a,
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
     tee << "\t\t initial_charge " << initial_charge << std::endl;
-    assert(a != nullptr);
-    assert(a_->num_particles <= kMaxParticles);
-    assert(a_->num_particles > 0);
   }
 
 void Particle::logToBuffer(const std::string &s) {
@@ -105,7 +101,7 @@ void Particle::ConsiderLoggingToFile(int count) {
   }
 
   void Particle::HandleEscape() {
-    log_prev_log_lines();
+    log_prev_log_lines(1);
     tee << "\t" << (is_electron ? "electron" : "proton")
         << " escaped past radius of " << max_dist_allow
         << "  Dist mag from origin : " << distance_mag_from_origin
@@ -127,12 +123,13 @@ void Particle::ConsiderLoggingToFile(int count) {
     // tee << "  pos " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
     // Zero out the biggest velocity or all?
     for (double & v : vel) v = 0;
-    log_count = 2;  // Force logging around this event.
+    log_count = 1;  // Force logging around this event.
     tee << std::endl;
-    if (a_->total_energy_escape == 0) {
-      a_->total_energy_escape = a_->total_energy;
+    if (a_->total_energy_cap == 0) {
+      a_->total_energy_cap = a_->total_energy * 1.2;  // * 1.1 because protons continue gaining energy.
     }
   }
+
 
   void Particle::CheckForEscape() {
     distance_mag_from_origin = sqrt(pow(pos[0], 2) + pow(pos[1], 2) + pow(pos[2], 2));
@@ -170,12 +167,9 @@ void Particle::ConsiderLoggingToFile(int count) {
   }
 
   void Particle::InitVarsToCalcForces() {
-    assert(a_ != nullptr);
-    assert(a_->num_particles > 0);
-    assert(a_->num_particles <= kMaxParticles);
     dist_mag_closest  = 1;      // 1 represents a large number that will be overwritten
                                 // quickly when checking for closest.
-    p_closest_attracted = nullptr;
+    par_closest = nullptr;
     energy_dissipated = false;
     for (double & force : forces) {
       force = 0;
@@ -202,9 +196,11 @@ void Particle::ConsiderLoggingToFile(int count) {
   //  2. Magnetic field of q1 due to intrinsic magnetic field.
   // Does the magnetic field of EM wave 1 interact with the magnetic field of EM wave 2?
   // The electric fields do, so you would think the magnetic fields should also.
-  void
-  Particle::MagneticForce(Particle *oth, double e_field_magnitude_oth, double q2,
+  void Particle::
+  MagneticForce(Particle *oth, double e_field_magnitude_oth, double q2,
                          double *dist_vector, double dist_mag_2, double *dist_unit_vector) {
+    // Save some CPU processing time when we are in slow mode, by ignoring the insignificant magnetic force.
+    if (a_->dt <= kShortDt) return;
     // Constants for calculating magnetic force.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
@@ -259,7 +255,6 @@ void Particle::ConsiderLoggingToFile(int count) {
   }
 
   void Particle::CalcForcesFromParticle(Particle* oth /* other particle */) {
-    assert(a_->num_particles > 0);
     int oth_id = oth->id;
     if (oth_id == id) return;
     double dist[3];
@@ -309,9 +304,9 @@ void Particle::ConsiderLoggingToFile(int count) {
     // Determine which attractive particle we are closest to.
     // This is often the particle exerting the largest force.
     // Used for logging.
-    if (dist_magn < dist_mag_closest && forces_attract) {
-      p_closest_attracted    = oth;
-      p_closest_attracted_id = oth_id;
+    if (dist_magn < dist_mag_closest && (forces_attract || !is_electron)) {
+      par_closest    = oth;
+      par_closest_id = oth_id;
       dist_mag_closest = dist_magn;
       for (int i = 0; i < 3; ++i) {
         dist_closest[i] = dist[i];
@@ -350,17 +345,17 @@ void Particle::ConsiderLoggingToFile(int count) {
     *fast_fraction_ptr = fast_fraction;
     new_dt = kLongDt + ((kShortDt - kLongDt) * inverse_exponential);
     // Dissipate energy when heading away.
-    if (dis_vel_dot_prod >= 0 && is_electron) {
-      // new_dt = new_dt / 4;  // Combat energy gain.
+    if (dist_vel_dot_prod >= 0
+     && orig_vel_dot_prod >= 0
+     && dist_mag_closest > (kCloseToTrouble*16)) {
       if (dis_vel_dot_prod_old < 0) {
         flipped_dis_vel_dot_prod = true;  // If true then log
-      } else if (a_->total_energy_escape != 0
-       && a_->total_energy > a_->total_energy_escape
-       && dist_mag_closest > kCloseToTrouble) {
-        energy_dissipated_prev = energy_dissipated;
-        energy_dissipated      = true;
+      } else if (a_->total_energy_cap != 0
+              && a_->total_energy_cap < a_->total_energy) {
+        energy_dissipated = true;
         for (int i = 0; i < 3; ++i) {
-          vel[i] *= 0.9999;  // Combat energy gain.
+          // Will cause total energy to drop.
+          vel[i] *= 0.999999;  // Combat energy gain.  Dissipate energy when heading away.
         }
       }
     }
@@ -379,17 +374,17 @@ void Particle::ConsiderLoggingToFile(int count) {
     // Force needs to be in the same direction as velocity.
     // If not then we don't to worry about particles heading in opposite directions.
     // Need unit vector for velocity and force, then do dot product.
-    Particle* close = p_closest_attracted;
+    Particle* close = par_closest;
     // If the vectors are pointing in the same direction (aligned), their dot product is 1.
     // If they are perpendicular, it's 0. If they are pointing in opposite directions, it's -1.
     // Since we are using distance as a proxy for force, sign is reversed.
-    bool force_same_dir_as_v = dis_vel_dot_prod < -0.75;    // -0.75 = guess
+    bool force_same_dir_as_v = dist_vel_dot_prod < -0.75;    // -0.75 = guess
     if (!force_same_dir_as_v) return;
 
     close->log_prev_log_lines(1);
-           log_prev_log_lines( );
+           log_prev_log_lines(1);
     tee << "\t Teleporting because force too high. " << (is_electron ? "e" : "p") << id
-        << "  distance velocity dot product " << dis_vel_dot_prod
+        << "  distance velocity dot product " << dist_vel_dot_prod
         << "  force magnitude " << force_magnitude
         << " x " << forces[0] << " y " << forces[1] << " z " << forces[2] << std::endl;
     tee << " velocity unit vector: x " << vel_unit_vec[0]
@@ -410,10 +405,10 @@ void Particle::ConsiderLoggingToFile(int count) {
     }
     tee << "\t Teleported to " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
     v_when_teleported = vel_mag;
-    log_count = 4;               // Force extra logging after this event.
+    log_count = 1;               // Force extra logging after this event.
     close->log_file << "\t\t\t" << (is_electron ? "e" : "p") << id << " teleported "  << std::endl;
     // if (num_particles_ > 2)
-    close->log_count = 2;          // Force extra logging for other particle.
+    close->log_count = 1;          // Force extra logging for other particle.
   }
 
   void Particle::ApplyForcesToParticle() {
@@ -425,20 +420,36 @@ void Particle::ConsiderLoggingToFile(int count) {
     vel_mag2 = pow(vel[0], 2) + pow(vel[1], 2) + pow(vel[2], 2);
     vel_mag  = sqrt(vel_mag2);
     for (int i = 0; i < 3; ++i) {
-      pos_change_3d[i]  = vel[i] * a_->dt;
+      pos_change[i]  = vel[i] * a_->dt;
       if (!kHoldingProtonSteady || is_electron) {
-        pos        [i] += pos_change_3d[i];
+        pos        [i] += pos_change[i];
       }
       vel_unit_vec [i]  = vel[i] / vel_mag;
       dist_unit_vec[i]  = dist_closest[i] / dist_mag_closest;
     }
-    dis_vel_dot_prod_old = dis_vel_dot_prod;
+    dis_vel_dot_prod_old = dist_vel_dot_prod;
     flipped_dis_vel_dot_prod = false;
 
-    // dot product between dist of closest and velocity.
-    dis_vel_dot_prod = dist_unit_vec[0] * vel_unit_vec[0] +
-                       dist_unit_vec[1] * vel_unit_vec[1] +
-                       dist_unit_vec[2] * vel_unit_vec[2];
+    if (is_electron) {
+      // dot product between dist of closest and velocity.
+      dist_vel_dot_prod = dist_unit_vec[0] * vel_unit_vec[0] +
+                         dist_unit_vec[1] * vel_unit_vec[1] +
+                         dist_unit_vec[2] * vel_unit_vec[2];
+    }
+    // Calc position unit vector
+    pos_magnitude = sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]);
+    for (int i = 0; i < 3; ++i) {
+      pos_unit_vec[i] = pos[i] / pos_magnitude;
+    }
+    orig_vel_dot_prod = pos_unit_vec[0] * vel_unit_vec[0] +
+                        pos_unit_vec[1] * vel_unit_vec[1] +
+                        pos_unit_vec[2] * vel_unit_vec[2];
+    // If it is a proton don't care if it is heading away or towards electrons,
+    // Since don't have ejection issue with protons.
+    if (!is_electron) {
+      // Only consider if proton is heading away or from origin when considering to dissipate energy.
+      dist_vel_dot_prod = orig_vel_dot_prod;
+    }
     // Use dot product between velocity and distance of closest to determine
     // if coming or going relative to closest attracting particle.
     // If the vectors are pointing in the same direction (aligned), their dot product is 1.
@@ -446,7 +457,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     NewDt(&fast_fraction);
 
     // pos_change_magnitude used to decide if we have moved enough for current frame.
-    pos_change_magnitude = sqrt(pow(pos_change_3d[0], 2) + pow(pos_change_3d[1], 2) + pow(pos_change_3d[2], 2));
+    pos_change_magnitude = sqrt(pow(pos_change[0], 2) + pow(pos_change[1], 2) + pow(pos_change[2], 2));
     // When particles are on top of each other forces approach infinity.
     // To get around that problem we teleport to other side of particle.
     // Alternative approach is to have a preprogrammed path and not bother with force calcs.
@@ -454,6 +465,5 @@ void Particle::ConsiderLoggingToFile(int count) {
       TeleportIfTooCloseToProton();
     }
   }
-
 
 } // namespace

@@ -49,7 +49,10 @@ public:
   double freq_charge;
 
   double pos[3] = {0, 0, 0};   // Position
-  double pos_change_3d[3];     // Change in position.
+  double pos_magnitude;        // Set for proton.
+  double pos_unit_vec[3];      // Set for proton.
+
+  double pos_change[3];        // Change in position.
   double pos_change_magnitude;
 
   volatile bool dist_calcs_done[sew::kMaxParticles];
@@ -62,8 +65,8 @@ public:
   double dist_mag_closest;
   double dist_unit_vec[3];   // Unit vector from closest
   double distance_mag_from_origin = 0;
-  Particle* p_closest_attracted;
-  int    p_closest_attracted_id;
+  Particle* par_closest;
+  int    par_closest_id;
 
   // Limit the distance of the particle from 0 to combat energy gain.
   const double max_dist_allow;
@@ -92,8 +95,10 @@ public:
   // Fast fraction informs were we are in the dt range between long and short.
   double fast_fraction = 0;  // Percent we are between long dt and short dt.
 
+  double orig_vel_dot_prod;  // Positive = moving away from origin.  Negative = moving towards origin.
   // Determine if electron is coming or going relative to closest proton.
-  double       dis_vel_dot_prod;
+  // For proton indicates if coming or going relative to center.
+  double       dist_vel_dot_prod;
   double       dis_vel_dot_prod_old;
   bool flipped_dis_vel_dot_prod = false;  // If true then log
   bool energy_dissipated = false;      // When leaving proton, dissipate energy.

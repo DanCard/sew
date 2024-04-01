@@ -41,7 +41,7 @@ public:
   double total_kinetic_energy = 0;
   double total_energy = 0;    // Total energy of all particles = potential energy + kinetic energy
   // Energy of all particles when we had an escape.  Above this energy we start dissipating energy.
-  double total_energy_escape = 0;
+  double total_energy_cap = 0;
   double potential_energy_average;
 
   double pot_energy_cycle[kPFrequencySubDivisions];
@@ -52,6 +52,9 @@ public:
   Atom(int numParticles);
 
   void moveParticles();
+
+  void EnergyLoggingToggle();
+  void VelocityLoggingToggle();
 
 private:
   void CalcAveragePotentialEnergy();

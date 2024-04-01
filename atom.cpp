@@ -22,7 +22,6 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
     std::cout << "\t\t\t\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
 
-    assert(numParticles <= kMaxParticles);
     int divider;  // Prefer bright colors, but with many particles becomes indistinguishable.
          if (num_particles <= 2)  divider = 1;
     else if (num_particles <= 4)  divider = 3;
@@ -73,13 +72,10 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
                 << " "           << int(p->color[2]) << std::endl;
       std::cout << "\t\t pos " << p->pos[0] << " " << p->pos[1] << " " << p->pos[2] << std::endl;
       std::cout << "\t\t this " << this << "  p->a_ " << p->a_ << std::endl;
-      assert(p->a_ == this);
     }
     for (double & p_energy_cycle_ : pot_energy_cycle) {
       p_energy_cycle_ = 0;
     }
-    assert(pars[0]->a_ == this);
-    assert(pars[1]->a_ == this);
   }
 
   // Potential energy changes because of sinusoidal charge frequency.
@@ -115,7 +111,6 @@ void Atom::CalcEnergyAndLog() {
         logger->w_to_log_id = w1->id;
       }
     }
-    assert(num_particles > 0);
 
     pot_energy_cycle[pot_energy_cycle_index] = total_potential_energy;
     pot_energy_cycle_index = (pot_energy_cycle_index + 1) % kPFrequencySubDivisions;
@@ -130,9 +125,6 @@ void Atom::CalcEnergyAndLog() {
   }
 
 void Atom::AllForcesOnParticle(Particle * part_ptr) {
-    assert(num_particles > 0);
-    assert(part_ptr->a_ == this);
-
     int part_num = part_ptr->id;
     part_ptr->InitVarsToCalcForces();
     for (int i = 0; i < num_particles; ++i) {
@@ -143,8 +135,6 @@ void Atom::AllForcesOnParticle(Particle * part_ptr) {
 
   // Called once for every screen draw.
 void Atom::moveParticles() {
-    assert(pars[0]->a_ == this);
-
     double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change_per_particle[j] = 0;
@@ -192,6 +182,15 @@ void Atom::moveParticles() {
       }
       // If screen_draw_event_occurred then we are over our computation budget.
     }
+  }
+
+
+  void Atom::EnergyLoggingToggle() {
+    logger->EnergyLoggingToggle();
+  }
+
+  void Atom::VelocityLoggingToggle() {
+    logger->VelocityLoggingToggle();
   }
 
 } // namespace

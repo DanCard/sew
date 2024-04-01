@@ -28,6 +28,12 @@ public:
 
   Logger(Atom* a);
 
+  bool energy_logging = true;
+  bool velocity_logging = true;
+  void EnergyLoggingToggle();
+  void VelocityLoggingToggle();
+
+
   static void SetColorForConsole(unsigned char r, unsigned char g, unsigned char b) {
     printf("\x1b[38;2;%d;%d;%dm", r, g, b);
   }
@@ -64,7 +70,6 @@ public:
 
   // Log a particle and misc info.
   void LogStuff(Particle* w);
-
 };
 
 } // namespace
