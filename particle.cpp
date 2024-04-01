@@ -6,11 +6,9 @@
 #include <iostream>
 #include <string>
 // #include <thread>
-#include <vector>
 
 #include "atom.h"
 #include "logger.h"
-#include "tee_stream.cpp"
 
 namespace sew {
 
@@ -19,7 +17,7 @@ Particle::Particle(int id, bool is_electron, Atom* a,
                     double max_dist_allowed, double max_speed_allowed,
                     Logger *logger
                     ) :
-          id(id), is_electron(is_electron), a(a),
+          id(id), is_electron(is_electron), a_(a),
           mass_mev(mass_mev), mass_kg(mass_kg), avg_q(avg_q), q_amplitude(q_amplitude),
           // Want paired particles to be at opposite ends of the sine wave.
           // In other words to be a half cycle away.
@@ -37,6 +35,9 @@ Particle::Particle(int id, bool is_electron, Atom* a,
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
     tee << "\t\t initial_charge " << initial_charge << std::endl;
+    assert(a != nullptr);
+    assert(a_->num_particles <= kMaxParticles);
+    assert(a_->num_particles > 0);
   }
 
 void Particle::logToBuffer(const std::string &s) {
@@ -110,7 +111,7 @@ void Particle::ConsiderLoggingToFile(int count) {
         << "  Dist mag from origin : " << distance_mag_from_origin
         << "  Current velocity " << sqrt(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2])
         << "  x " << vel[0] << " y " << vel[1] << " z " << vel[2]
-        << "  total energy " << a->total_energy;
+        << "  total energy " << a_->total_energy;
     if (v_when_teleported > 0) {
         tee << "  V when previously teleported: " << v_when_teleported;
     }
@@ -128,8 +129,8 @@ void Particle::ConsiderLoggingToFile(int count) {
     for (double & v : vel) v = 0;
     log_count = 2;  // Force logging around this event.
     tee << std::endl;
-    if (a->total_energy_escape == 0) {
-      a->total_energy_escape = a->total_energy;
+    if (a_->total_energy_escape == 0) {
+      a_->total_energy_escape = a_->total_energy;
     }
   }
 
@@ -165,10 +166,13 @@ void Particle::ConsiderLoggingToFile(int count) {
     // Frequency is kEFrequency or kPFrequency.
     // 
     // Charge = e + e * sin(2 * pi * frequency * time + initial_charge)
-    return avg_q + (q_amplitude * sin((frequency * a->time_ * 2 * M_PI) + initial_charge));
+    return avg_q + (q_amplitude * sin((frequency * a_->time_ * 2 * M_PI) + initial_charge));
   }
 
   void Particle::InitVarsToCalcForces() {
+    assert(a_ != nullptr);
+    assert(a_->num_particles > 0);
+    assert(a_->num_particles <= kMaxParticles);
     dist_mag_closest  = 1;      // 1 represents a large number that will be overwritten
                                 // quickly when checking for closest.
     p_closest_attracted = nullptr;
@@ -179,7 +183,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     for (double & magnet_force : magnet_fs) {
       magnet_force = 0;
     }
-    for (int i=0; i<a->num_particles; ++i) {
+    for (int i=0; i<a_->num_particles; ++i) {
       dist_mag [i] = 0;       // Will assert if we test and find these values.
       dist_mag2[i] = 0;
     }
@@ -255,6 +259,7 @@ void Particle::ConsiderLoggingToFile(int count) {
   }
 
   void Particle::CalcForcesFromParticle(Particle* oth /* other particle */) {
+    assert(a_->num_particles > 0);
     int oth_id = oth->id;
     if (oth_id == id) return;
     double dist[3];
@@ -349,8 +354,8 @@ void Particle::ConsiderLoggingToFile(int count) {
       // new_dt = new_dt / 4;  // Combat energy gain.
       if (dis_vel_dot_prod_old < 0) {
         flipped_dis_vel_dot_prod = true;  // If true then log
-      } else if (a->total_energy_escape != 0
-       && a->total_energy > a->total_energy_escape
+      } else if (a_->total_energy_escape != 0
+       && a_->total_energy > a_->total_energy_escape
        && dist_mag_closest > kCloseToTrouble) {
         energy_dissipated_prev = energy_dissipated;
         energy_dissipated      = true;
@@ -415,12 +420,12 @@ void Particle::ConsiderLoggingToFile(int count) {
     force_magnitude = sqrt(pow(forces[0], 2) + pow(forces[1], 2) + pow(forces[2], 2));
     for (int i = 0; i < 3; ++i) {
       acceleration[i] = forces[i] / this->mass_kg;
-      vel[i] += acceleration[i] * a->dt;
+      vel[i] += acceleration[i] * a_->dt;
     }
     vel_mag2 = pow(vel[0], 2) + pow(vel[1], 2) + pow(vel[2], 2);
     vel_mag  = sqrt(vel_mag2);
     for (int i = 0; i < 3; ++i) {
-      pos_change_3d[i]  = vel[i] * a->dt;
+      pos_change_3d[i]  = vel[i] * a_->dt;
       if (!kHoldingProtonSteady || is_electron) {
         pos        [i] += pos_change_3d[i];
       }

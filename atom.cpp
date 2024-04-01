@@ -1,15 +1,8 @@
 #include "atom.h"
 
-#include <algorithm>
 #include <cassert>
-#include <cmath>   // For M_PI constant and other match functions such as round.
-#include <chrono>  // For logging every 500 ms
 #include <cstdlib> // For rand()
-#include <fstream>
 #include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <string>
 #include <thread>
 #include <vector>
 
@@ -19,10 +12,9 @@
 
 namespace sew {
 
-
 Atom::Atom(int numParticles) : num_particles(numParticles) {
     if (num_particles == 0) return;
-    logger = new sew::Logger(*this);
+    logger = new sew::Logger(this);
     const int num_threads = std::thread::hardware_concurrency();
     std::cout << "\t\t\t num threads " << num_threads << std::endl;
     std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
@@ -80,10 +72,14 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " "           << int(p->color[2]) << std::endl;
       std::cout << "\t\t pos " << p->pos[0] << " " << p->pos[1] << " " << p->pos[2] << std::endl;
+      std::cout << "\t\t this " << this << "  p->a_ " << p->a_ << std::endl;
+      assert(p->a_ == this);
     }
     for (double & p_energy_cycle_ : pot_energy_cycle) {
       p_energy_cycle_ = 0;
     }
+    assert(pars[0]->a_ == this);
+    assert(pars[1]->a_ == this);
   }
 
   // Potential energy changes because of sinusoidal charge frequency.
@@ -119,6 +115,7 @@ void Atom::CalcEnergyAndLog() {
         logger->w_to_log_id = w1->id;
       }
     }
+    assert(num_particles > 0);
 
     pot_energy_cycle[pot_energy_cycle_index] = total_potential_energy;
     pot_energy_cycle_index = (pot_energy_cycle_index + 1) % kPFrequencySubDivisions;
@@ -133,6 +130,9 @@ void Atom::CalcEnergyAndLog() {
   }
 
 void Atom::AllForcesOnParticle(Particle * part_ptr) {
+    assert(num_particles > 0);
+    assert(part_ptr->a_ == this);
+
     int part_num = part_ptr->id;
     part_ptr->InitVarsToCalcForces();
     for (int i = 0; i < num_particles; ++i) {
@@ -143,6 +143,7 @@ void Atom::AllForcesOnParticle(Particle * part_ptr) {
 
   // Called once for every screen draw.
 void Atom::moveParticles() {
+    assert(pars[0]->a_ == this);
 
     double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {

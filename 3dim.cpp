@@ -53,8 +53,6 @@ public:
 
 
 protected:
-  sew::Atom atom = sew::Atom(0);  // Stupid initialization because of compiler error.
-  UnsignedInt numSpheres;  // Number of subatomic particles to simulate in the atom.
   void viewportEvent(ViewportEvent& event) override;      // Handle window resize
   void keyPressEvent(KeyEvent& event) override;
   void drawEvent() override;                              // Called every frame
@@ -87,6 +85,8 @@ protected:
   Containers::Array<SphereInstanceData> _sphereInstanceData;
 
 private:
+  sew::Atom * atom = new sew::Atom(0);  // Stupid initialization because of compiler error.
+  UnsignedInt numSpheres;    // Number of subatomic particles to simulate in the atom.
   std::thread moveParticlesThread;
   volatile bool move_particles_thread_run = true;
   void NotifyDrawEvent();
@@ -107,7 +107,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
 
   _sphereRadius = args.value<Float>("sphere-radius");
   _sphereVelocity = args.value<Float>("sphere-velocity");
-
+  sew::Atom * atom_ptr;
   // Setup window and parameters
   {
       const Vector2 dpiScaling = this->dpiScaling({});
@@ -156,13 +156,16 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   _spherePositions = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereVelocities = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereInstanceData = Containers::Array<SphereInstanceData>{NoInit, numSpheres};
-  atom = sew::Atom(numSpheres);
+  std::cout << "atom: " << atom << std::endl;
+  atom = new sew::Atom(numSpheres);
+  atom_ptr = atom->pars[0]->a_;
+
   _spherePositions[0] = Vector3{
-      static_cast<float>(atom.pars[0]->pos[0] / kScale),
-      static_cast<float>(atom.pars[0]->pos[1] / kScale),
-      static_cast<float>(atom.pars[0]->pos[2] / kScale)};
+      static_cast<float>(atom->pars[0]->pos[0] / kScale),
+      static_cast<float>(atom->pars[0]->pos[1] / kScale),
+      static_cast<float>(atom->pars[0]->pos[2] / kScale)};
   for (int i=0; i<numSpheres; i++) {
-    sew::Particle *p = atom.pars[i];
+    sew::Particle *p = atom->pars[i];
     _sphereInstanceData[i].color = Color4{(float)p->color[0]/255,
                                           (float)p->color[1]/255,
                                           (float)p->color[2]/255,
@@ -176,7 +179,8 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();
   }
   std::cout << "\t sphere pos: " << _spherePositions[0][0]
-              << " electron pos: " << atom.pars[0]->pos[0]
+              << " electron pos: " << atom->pars[0]->pos[0]
+              << "  class atom address " << atom->pars[0]->a_
               << std::endl;
   {        // Rendering spheres / particles.
       _sphereShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}
@@ -191,7 +195,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
           Shaders::PhongGL::Color4{});      // Should that be Color4?
       _sphereMesh.setInstanceCount(_sphereInstanceData.size());
   }
-
+  assert(atom_ptr == atom->pars[0]->a_);
   // Start thread to move particles.
   moveParticlesThread = std::thread(&ThreeDim::moveParticles, this);
   // moveParticlesThread.detach(); // Avoids terminal error: terminate called without an active exception
@@ -203,27 +207,27 @@ std::condition_variable condition_var;
 void ThreeDim::moveParticles() {
   bool just_waited = false;
   while (move_particles_thread_run) {
-    while (atom.screen_draw_event_occurred && _animation) {
-      atom.screen_draw_event_occurred = false;
+    while (atom->screen_draw_event_occurred && _animation) {
+      atom->screen_draw_event_occurred = false;
       if (!just_waited)                       // Only used for logging.
-        atom.num_drawing_event_already += 1;  // Only used for logging.
+        atom->num_drawing_event_already += 1;
       just_waited = false;                    // Only used for logging.
 
-      atom.moveParticles();
+      atom->moveParticles();
     }
-    atom.num_wait_for_drawing_event += 1;     // Only used for logging.
+    atom->num_wait_for_drawing_event += 1;     // Only used for logging.
     just_waited = true;                       // Only used for logging.
     {
       // Grab a lock and wait for the next screen draw event.
       std::unique_lock<std::mutex> lk(mutually_exclusive_lock);
-      condition_var.wait(lk, [this]{return atom.screen_draw_event_occurred;});
+      condition_var.wait(lk, [this]{return atom->screen_draw_event_occurred;});
     }
   }
   // std::cout << "\t moveParticles() thread terminating as requested." << std::endl;
 }
 
 void ThreeDim::NotifyDrawEvent() {
-  atom.screen_draw_event_occurred = true;
+  atom->screen_draw_event_occurred = true;
   std::lock_guard<std::mutex> lk(mutually_exclusive_lock);
   condition_var.notify_one();
 }
@@ -238,7 +242,7 @@ void ThreeDim::drawEvent() {
     // atom.moveParticles();
     for (int i=0; i<numSpheres; i++) {
       for (int j=0; j<3; j++) {
-        _spherePositions[i][j] = static_cast<float>(atom.pars[i]->pos[j] / kScale);
+        _spherePositions[i][j] = static_cast<float>(atom->pars[i]->pos[j] / kScale);
       }
     }
   }

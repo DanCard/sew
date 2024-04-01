@@ -2,7 +2,6 @@
 
 #include <cmath>   // For M_PI constant and other match functions such as round.
 #include <chrono>  // For logging every 500 ms
-#include <cstdlib> // For rand()
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -13,7 +12,7 @@
 
 namespace sew {
 
-  Logger::Logger(Atom& a) : a_(a) {}
+  Logger::Logger(Atom* a) : a_(a) {}
 
   // A bit of a mess because we have particle data and particles(system) data that we are logging.
   std::string Logger::FormatLogLine(Particle* w) {
@@ -22,7 +21,7 @@ namespace sew {
 
     std::ostringstream log_line;
     log_line
-      << std::setw(8) << a_.count << (w->is_electron ? " e" : " p") << w->id
+      << std::setw(8) << a_->count << (w->is_electron ? " e" : " p") << w->id
       << "⋅" << (p_closest_attracted->is_electron ? "e" : "p") << w->p_closest_attracted_id
       << std::scientific << std::setprecision(3)
       << "  dis"  << std::setw(10) << w->dist_mag_closest
@@ -31,7 +30,7 @@ namespace sew {
       << (w->energy_dissipated ? " *" : "  ") << std::fixed << std::setprecision(1)
       << "d⋅v " << std::setw( 4) << w->dis_vel_dot_prod    // -1 = approaching, 1 = leaving
       << std::scientific << std::setprecision(2)
-      << "  dt"   << std::setw( 9) << a_.dt    // << " new " << new_dt
+      << "  dt"   << std::setw( 9) << a_->dt    // << " new " << new_dt
       << " fast"  << std::setw(10) << std::setprecision(3) << w->fast_fraction << std::setprecision(2)
       << " f "    << std::setw( 9) << w->force_mag_closest
    // << Log3dArray(forces  , " fs")
@@ -53,11 +52,11 @@ namespace sew {
    // << " inv"   << std::setw(12) << inverse_exponential
       << std::scientific << std::setprecision(2)
       // P energy goes negative, that is why width is larger.
-      << "  pe"   << std::setw(10) << a_.potential_energy_average
-      << " ke"    << std::setw( 9) << a_.total_kinetic_energy
-      << " te"    << std::setw( 9) << a_.total_energy
-      << " L "    << std::setw( 2) << a_.num_drawing_event_already   // Late.  Drawing event already occurred.
-      << " E "    << std::setw( 2) << a_.num_wait_for_drawing_event  // Calcs were early.  Waited on drawing event.
+      << "  pe"   << std::setw(10) << a_->potential_energy_average
+      << " ke"    << std::setw( 9) << a_->total_kinetic_energy
+      << " te"    << std::setw( 9) << a_->total_energy
+      << " L "    << std::setw( 2) << a_->num_drawing_event_already   // Late.  Drawing event already occurred.
+      << " E "    << std::setw( 2) << a_->num_wait_for_drawing_event  // Calcs were early.  Waited on drawing event.
     ;
     /*
     for (int i=0; i<num_particles_; ++i) {
@@ -84,17 +83,17 @@ namespace sew {
         w->log_prev_log_lines(1);
       }
       std::string log_line_str = FormatLogLine(w);
-      a_.num_drawing_event_already  = 0;
-      a_.num_wait_for_drawing_event = 0;
+      a_->num_drawing_event_already  = 0;
+      a_->num_wait_for_drawing_event = 0;
       w->tee << log_line_str << std::endl;
       last_log_time = now;
-      w_to_log_id = (w_to_log_id + 1) % a_.num_particles;   // Divide by 2 to skip logging protons to screen.
+      w_to_log_id = (w_to_log_id + 1) % a_->num_particles;   // Divide by 2 to skip logging protons to screen.
       w->log_count--;
       w->logToBuffer(log_line_str);
       return;
     }
     // Didn't log to screen so consider logging to just file.
-    w->ConsiderLoggingToFile(a_.count);
+    w->ConsiderLoggingToFile(a_->count);
   }
 
 } // namespace

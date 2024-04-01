@@ -17,7 +17,6 @@
 #include "logger.h"
 #include "particle.h"
 
-
 namespace sew {
 
 class Atom {
