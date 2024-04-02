@@ -152,11 +152,9 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   }
 
   numSpheres = args.value<UnsignedInt>("spheres");
-  const Vector3 tmpPos = Vector3(std::rand(), std::rand(), std::rand()) / Float(RAND_MAX);
   _spherePositions = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereVelocities = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereInstanceData = Containers::Array<SphereInstanceData>{NoInit, numSpheres};
-  std::cout << "atom: " << atom << std::endl;
   atom = new sew::Atom(numSpheres);
   atom_ptr = atom->pars[0]->a_;
 
