@@ -38,7 +38,7 @@ public:
     printf("\x1b[38;2;%d;%d;%dm", r, g, b);
   }
 
-  static bool IsSignificantParameter(const double *d3, int i) {
+  static bool IsSignificantParameter(const SFloat *d3, int i) {
     if (std::abs(d3[i]) < 1e-20) return false;
     if (i == 0) return d3[0] != 0;
     if (d3[0] == 0) return d3[i] != 0;
@@ -46,7 +46,7 @@ public:
     return std::abs(d3[0] / d3[i]) < 10;
   }
 
-  static std::string Log3dArray(double *d3, const std::string &name, int width = 6) {
+  static std::string Log3dArray(SFloat *d3, const std::string &name, int width = 6) {
     std::ostringstream log_line;
     // Set precision based on width.  If width is 6, then precision is 0.
     // If width is 8, then precision is 1.  Cause 1 space for the decimal point.

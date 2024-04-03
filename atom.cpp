@@ -61,7 +61,7 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
       }
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " " << int(p->color[2]);
-      // double max_dist = p->max_dist_allow * 0.5;
+      // SFloat max_dist = p->max_dist_allow * 0.5;
       for (int j = 0; j < 3; ++j) {
         if (num_particles > 2) {
           // Set random locations
@@ -77,7 +77,7 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
       std::cout << "\t\t pos " << p->pos[0] << " " << p->pos[1] << " " << p->pos[2] << std::endl;
       std::cout << "\t\t this " << this << "  p->a_ " << p->a_ << std::endl;
     }
-    for (double & p_energy_cycle_ : pot_energy_cycle) {
+    for (SFloat & p_energy_cycle_ : pot_energy_cycle) {
       p_energy_cycle_ = 0;
     }
   }
@@ -96,7 +96,7 @@ void Atom::CalcEnergy() {
     // Calculate potential energy.
     total_potential_energy = 0;
     total_kinetic_energy = 0;
-    double closest = 1;  // meters.  Just setting to a large number.
+    SFloat closest = 1;  // meters.  Just setting to a large number.
 
     // Potential energy = sum of all potential energies.
     // Set the potential energy for each pair of particles.
@@ -138,7 +138,7 @@ void Atom::AllForcesOnParticle(Particle * part_ptr) {
 
   // Called once for every screen draw.
 void Atom::MoveParticles() {
-    double pos_change_per_particle[kMaxParticles];
+    SFloat pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change_per_particle[j] = 0;
     }
@@ -181,7 +181,7 @@ void Atom::MoveParticles() {
       for (int j = 0; j < num_particles; ++j) {
         // Lets not move faster than it would take an electron to go from center to edge,
         // faster than two seconds.
-        const double max_pos_change_desired = kBohrRadius / (60*2);  // 60 fps
+        const SFloat max_pos_change_desired = kBohrRadius / (60*2);  // 60 fps
         if (pos_change_per_particle[j] > max_pos_change_desired) {
           return;
         }

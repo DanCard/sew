@@ -25,7 +25,7 @@ namespace Magnum { namespace Examples {
 // particles position in the magnum library.
 // VTK has bugs with small scale.  Use scale factor to overcome issues.
 // Scale only used to set pseudo position in magnum
-const double kScale = 1e-11;    // Number arrived by trial and refinement.
+const SFloat kScale = 1e-11;    // Number arrived by trial and refinement.
 // Real   position = magnum position * scale
 // magnum position = real   position / scale
 

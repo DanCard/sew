@@ -25,7 +25,7 @@ namespace sew {
   // A bit of a mess because we have particle data and particles(system) data that we are logging.
   std::string Logger::FormatLogLine(Particle* w, bool to_file) const {
     Particle* par_closest = w->par_closest;
-    double charge_of_closest = par_closest->freq_charge;
+    SFloat charge_of_closest = par_closest->freq_charge;
 
     std::ostringstream log_line;
     log_line

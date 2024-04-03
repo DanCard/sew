@@ -12,8 +12,8 @@
 namespace sew {
 
 Particle::Particle(int id, bool is_electron, Atom* a,
-                    double mass_mev, double mass_kg, double avg_q, double q_amplitude,
-                    double max_dist_allowed, double max_speed_allowed,
+                    SFloat mass_mev, SFloat mass_kg, SFloat avg_q, SFloat q_amplitude,
+                    SFloat max_dist_allowed, SFloat max_speed_allowed,
                     Logger *logger
                     ) :
           id(id), is_electron(is_electron), a_(a),
@@ -57,7 +57,7 @@ void Particle::log_prev_log_lines(int max_lines_to_log) {
 
 
 void Particle::ConsiderLoggingToFile(int count) {
-    double danger_speed = max_speed_allow / 2;
+    SFloat danger_speed = max_speed_allow / 2;
 
     bool particles_are_close      = dist_mag_closest < (kCloseToTrouble * 2);
     bool particles_are_close_very = dist_mag_closest < kCloseToTrouble;
@@ -116,14 +116,14 @@ void Particle::ConsiderLoggingToFile(int count) {
     assert(pos[0] != 0 || pos[1] != 0 || pos[2] != 0);
     // We want the magnitude to be under the bohr radius.
     // Distance to shave off.  Subtract 1% to keep things safe.
-    double dist_to_shave = ( max_dist_allow / distance_mag_from_origin ) - 0.05;
+    SFloat dist_to_shave = ( max_dist_allow / distance_mag_from_origin ) - 0.05;
     // tee << "  dist_to_shave " << dist_to_shave;
-    for (double & po : pos) {
+    for (SFloat & po : pos) {
       po = po * dist_to_shave;
     }
     // tee << "  pos " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
     // Zero out the biggest velocity or all?
-    for (double & v : vel) v = 0;
+    for (SFloat & v : vel) v = 0;
     log_count = 1;  // Force logging around this event.
     tee << std::endl;
     if (a_->total_energy_cap == 0) {
@@ -144,7 +144,7 @@ void Particle::ConsiderLoggingToFile(int count) {
 
 
   // Get the charge that is based on freq and thus time.
-  double Particle::ChargeSinusoidal() const {
+  SFloat Particle::ChargeSinusoidal() const {
     // if dt > 0.25 / frequency, then charge is constant.
     // Can't simulate sinusoidal charge when dt is large.
     /*
@@ -172,10 +172,10 @@ void Particle::ConsiderLoggingToFile(int count) {
                                 // quickly when checking for closest.
     par_closest = nullptr;
     energy_dissipated = false;
-    for (double & force : forces) {
+    for (SFloat & force : forces) {
       force = 0;
     }
-    for (double & magnet_force : magnet_fs) {
+    for (SFloat & magnet_force : magnet_fs) {
       magnet_force = 0;
     }
     for (int i=0; i<a_->num_particles; ++i) {
@@ -199,20 +199,20 @@ void Particle::ConsiderLoggingToFile(int count) {
   // Does the magnetic field of EM wave 1 interact with the magnetic field of EM wave 2?
   // The electric fields do, so you would think the magnetic fields should also.
   void Particle::
-  MagneticForce(Particle *oth, double e_field_magnitude_oth, double q2,
-                         double *dist_vector, double dist_mag_2,
-                         const double *dist_unit_vector) {
+  MagneticForce(Particle *oth, SFloat e_field_magnitude_oth, SFloat q2,
+                         SFloat *dist_vector, SFloat dist_mag_2,
+                         const SFloat *dist_unit_vector) {
     // Save some CPU processing time when we are in slow mode, by ignoring the insignificant magnetic force.
     if (a_->dt <= kShortDt) return;
     // Constants for calculating magnetic force.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
-    const double kPermeabilityDividedBy4Pi = 1e-7;  // T * m / A
+    const SFloat kPermeabilityDividedBy4Pi = 1e-7;  // T * m / A
     // Biot-Savart law.  https://en.wikipedia.org/wiki/Biot%E2%80%93Savart_law
     // B = μ0/4π * q * (cross product of v and r) / |r|^2
-    double vel_oth_cross_dis[3];
+    SFloat vel_oth_cross_dis[3];
     cross(oth->vel, dist_vector, vel_oth_cross_dis);
-    double b_field_by_oth_vel[3];    // Magnetic field created by other particles velocity
+    SFloat b_field_by_oth_vel[3];    // Magnetic field created by other particles velocity
     for (int i = 0; i < 3; ++i) {
       // https://en.wikipedia.org/wiki/Biot%E2%80%93Savart_law
       // https://docs.google.com/document/d/1Tc1AZltK30YA-u-corns3hVO7Zcx22uYE1TyT4i_NNU
@@ -220,7 +220,7 @@ void Particle::ConsiderLoggingToFile(int count) {
       assert(!std::isnan(b_field_by_oth_vel[i]));
     }
     // Lorentz force from oth particle magnetic field = q * v x B
-    double v_cross_b_field_oth_v[3];
+    SFloat v_cross_b_field_oth_v[3];
     cross(vel, b_field_by_oth_vel, v_cross_b_field_oth_v);
     for (int i = 0; i < 3; ++i) {
       b_force_by_oth_vel[i] = freq_charge * v_cross_b_field_oth_v[i];
@@ -234,13 +234,13 @@ void Particle::ConsiderLoggingToFile(int count) {
     // https://www.se.edu/kfrinkle/wp-content/uploads/sites/89/2013/10/main23v130303.pdf
     // Deriving E=cB and B=µ0·ε0·c·E using Maxwell's Equations: https://www.youtube.com/watch?v=dW1q8XQcEdI
     // Magnetic field created by other.
-    double b_field_caused_by_intrinsic_oth_magnitude = e_field_magnitude_oth / kC;
-    double b_field_by_oth_intrinsic[3];
+    SFloat b_field_caused_by_intrinsic_oth_magnitude = e_field_magnitude_oth / kC;
+    SFloat b_field_by_oth_intrinsic[3];
     for (int i = 0; i < 3; ++i) {
       // (i+1)%3 = rotate 90 degrees.  To do: Figure out correct way of doing this.
       b_field_by_oth_intrinsic[(i+1)%3] = dist_unit_vector[i] * b_field_caused_by_intrinsic_oth_magnitude;
     }
-    double vel_cross_b_field_intrinsic[3];
+    SFloat vel_cross_b_field_intrinsic[3];
     cross(vel, b_field_by_oth_intrinsic, vel_cross_b_field_intrinsic);
     for (int i = 0; i < 3; ++i) {
       // Lorentz force from oth particle magnetic field = q * v x B
@@ -260,13 +260,13 @@ void Particle::ConsiderLoggingToFile(int count) {
   void Particle::CalcForcesFromParticle(Particle* oth /* other particle */) {
     int oth_id = oth->id;
     if (oth_id == id) return;
-    double dist[3];
+    SFloat dist[3];
     for (int i = 0; i < 3; ++i) {
       dist[i] = pos[i] - oth->pos[i];
     }
 
-    double dist_magn;
-    double dist_magn2;
+    SFloat dist_magn;
+    SFloat dist_magn2;
     // If we have already done the calcs, then use the cached values in the other standing wave.
     if (oth->dist_calcs_done[oth_id]) {
       dist_magn  = oth->dist_mag_all [id];
@@ -284,16 +284,16 @@ void Particle::ConsiderLoggingToFile(int count) {
     assert(dist_magn  > 0);  // Since we can't handle infinite forces, lets assume this is always true.
     assert(dist_magn2 > 0);  // Since we can't handle infinite forces, lets assume this is always true.
 
-    double dist_unit_vector[3];
+    SFloat dist_unit_vector[3];
     for (int i = 0; i < 3; ++i) {
       dist_unit_vector[i] = dist[i] / dist_magn;
     }
 
     // Current charge varies based on frequency and time.
-    double other_charge = oth->freq_charge;
-    double e_field_magnitude_oth = kCoulomb * other_charge / dist_magn;
+    SFloat other_charge = oth->freq_charge;
+    SFloat e_field_magnitude_oth = kCoulomb * other_charge / dist_magn;
     // When opposite charges, force is negative.  When same charges, force is positive.
-    double eforce_magnitude = freq_charge * e_field_magnitude_oth / dist_magn;
+    SFloat eforce_magnitude = freq_charge * e_field_magnitude_oth / dist_magn;
     for (int i = 0; i < 3; ++i) {
       eforce[i] = eforce_magnitude * dist_unit_vector[i];
     }
@@ -323,17 +323,17 @@ void Particle::ConsiderLoggingToFile(int count) {
 
 
   // When forces are very high we should slow down delta time (dt) to make calculations more accurate.
-  void Particle::NewDt(double * fast_fraction_ptr) {
+  void Particle::NewDt(SFloat * fast_fraction_ptr) {
     // Simulation will slow down alot below this distance.  Will make simulation more accurate.
-    const double kSmallDtDistance = kCloseToTrouble * 2;
+    const SFloat kSmallDtDistance = kCloseToTrouble * 2;
     // Simulation will slow down when particles are closer than this.  Will make simulation more accurate.
-    const double safe_distance = kBohrRadius;
+    const SFloat safe_distance = kBohrRadius;
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
     // fast_fraction < 0 when distance shorter than kCloseToTrouble.
     // fast_fraction > 1 when distance is further than (kBohrRadius / 8).
     fast_fraction = (dist_mag_closest - kSmallDtDistance) / (safe_distance - kSmallDtDistance);
-    double inverse_exponential;
+    SFloat inverse_exponential;
     if (fast_fraction > 1) {
       fast_fraction = 1;
       inverse_exponential = 0;
@@ -359,7 +359,7 @@ void Particle::ConsiderLoggingToFile(int count) {
       } else if (a_->total_energy_cap != 0
               && a_->total_energy_cap < a_->total_energy) {
         energy_dissipated = true;
-        for (double & v : vel) {
+        for (SFloat & v : vel) {
           // Will cause total energy to drop.
           v *= 0.999999;  // Combat energy gain.  Dissipate energy when heading away.
         }

@@ -36,19 +36,19 @@ public:
   volatile int n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event = 0;
 
   // Delta time in seconds.
-  double dt = kShortDt;
-  double time_ = 0;
+  SFloat dt = kShortDt;
+  SFloat time_ = 0;
   int    count = 0;         // Invocation count of moving particles.
-  double total_potential_energy = 0;
-  double total_kinetic_energy = 0;
-  double total_energy = 0;    // Total energy of all particles = potential energy + kinetic energy
+  SFloat total_potential_energy = 0;
+  SFloat total_kinetic_energy = 0;
+  SFloat total_energy = 0;    // Total energy of all particles = potential energy + kinetic energy
   // Energy of all particles when we had an escape.  Above this energy we start dissipating energy.
-  double total_energy_cap = 0;
-  double potential_energy_average;
+  SFloat total_energy_cap = 0;
+  SFloat potential_energy_average;
 
-  double pot_energy_cycle[kPFrequencySubDivisions];
+  SFloat pot_energy_cycle[kPFrequencySubDivisions];
   int    pot_energy_cycle_index = 0;
-  double sum_p_energy = 0;        // Only used in below method.
+  SFloat sum_p_energy = 0;        // Only used in below method.
   Logger* logger;
 
   explicit Atom(int numParticles);
