@@ -23,7 +23,7 @@ namespace sew {
   }
 
   // A bit of a mess because we have particle data and particles(system) data that we are logging.
-  std::string Logger::FormatLogLine(Particle* w) {
+  std::string Logger::FormatLogLine(Particle* w, bool to_file) const {
     Particle* par_closest = w->par_closest;
     double charge_of_closest = par_closest->freq_charge;
 
@@ -34,7 +34,7 @@ namespace sew {
       << std::scientific << std::setprecision(3)
       << "  dis"  << std::setw(10) << (w->is_electron ? w->dist_mag_closest : w->pos_magnitude)
       << "  vel " << std::setw(10) << w->vel_mag
-      << (velocity_logging ? Log3dArray(w->vel, "v") : "")
+      << (velocity_logging || to_file ? Log3dArray(w->vel, "v") : "")
       << (w->energy_dissipated ? " *" : "  ") << std::fixed << std::setprecision(1)
       << "d⋅v " << std::setw( 4) << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
       << std::scientific << std::setprecision(2)
@@ -50,7 +50,7 @@ namespace sew {
    // << Log3dArray(acceleration, "a")
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
    // << Log3dArray(pos_change, "chng") << std::setprecision(1)
-   // << Log3dArray(pos     , "pos")
+      << Log3dArray(w->pos, "pos")
    // << " min pos change " << min_pos_change_desired
    // << round(fast_fraction * 10) * 10 << '%'
                   << std::setw( 6) << std::setprecision(1) << std::fixed 
@@ -66,13 +66,15 @@ namespace sew {
         << " te"    << std::setw( 9) << a_->total_energy;
     }
     log_line
-      << " L "    << std::setw( 2) << a_->num_drawing_event_already   // Late.  Drawing event already occurred.
-      << " E "    << std::setw( 2) << a_->num_wait_for_drawing_event  // Calcs were early.  Waited on drawing event.
+        // Late.  Drawing event already occurred.
+      << " L "    << std::setw( 2) << a_->n_times_per_screen_logging_MoveParticles_not_compl_before_next_frame_draw_event
+        // Early. Waited on drawing event.
+      << " E "    << std::setw( 2) << a_->n_times_per_screen_logging_MoveParticles_completed_before_next_frame_draw_event
     ;
     /*
     for (int i=0; i<num_particles_; ++i) {
       if (i == id || i == par_closest_id) continue;
-      log_line << (i >= (num_particles_/2) ? " p" : "  e") << i << " " << dist_mag[i];
+      log_line << (i >= (num_particles_/2) ? " p" : "  e") << i << " " << dist_mag_all[i];
     }
     */
     return log_line.str();
@@ -94,12 +96,10 @@ namespace sew {
       if (w->flipped_dis_vel_dot_prod) {
         w->log_prev_log_lines(1);
       }
-      std::string log_line_str = FormatLogLine(w);
-      a_->num_drawing_event_already  = 0;
-      a_->num_wait_for_drawing_event = 0;
-      w->tee << log_line_str
-             << (w->energy_dissipated_prev != w->energy_dissipated ? " *" : "  ")
-             << std::endl;
+      std::string log_line_str = FormatLogLine(w, false);
+      a_->n_times_per_screen_logging_MoveParticles_not_compl_before_next_frame_draw_event = 0;
+      a_->n_times_per_screen_logging_MoveParticles_completed_before_next_frame_draw_event = 0;
+      w->tee << log_line_str << std::endl;
       last_log_time = now;
       w_to_log_id = (w_to_log_id + 1) % a_->num_particles;
       w->log_count--;

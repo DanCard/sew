@@ -26,9 +26,9 @@ class Logger {
 public:
   sew::Atom* a_;
 
-  Logger(Atom* a);
+  explicit Logger(Atom* a);
 
-  bool energy_logging = true;
+  bool energy_logging = false;
   bool velocity_logging = true;
   void EnergyLoggingToggle();
   void VelocityLoggingToggle();
@@ -64,7 +64,7 @@ public:
   }
 
   // A bit of a mess because we have particle data and particles(system) data that we are logging.
-  std::string FormatLogLine(Particle* w);
+  std::string FormatLogLine(Particle* w, bool to_file) const;
 
   int w_to_log_id = 0;  // Rotate through particles to log to screen, when we don't
 

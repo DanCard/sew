@@ -24,14 +24,16 @@ public:
   Particle * pars[kMaxParticles];  // par[ticle]s
   int num_particles = 0;
 
-  volatile bool screen_draw_event_occurred = true;
+  volatile bool frame_draw_event_occurred;
   // Only used for logging.
   // If we are doing lots of calcs because electron close to proton, then we will wait for
   // draw event before finishing calcs.  That way we get maximum movement per frame.
   // In other words: simulation is too damn slow, and we want speed up so use all of the
   // compute budget per frame.
-  volatile int num_drawing_event_already  = 0; // Drawing event already occurred, no need to wait.
-  volatile int num_wait_for_drawing_event = 0;
+  // Number of times per screen logging that MoveParticles() completed before
+  // next frame draw event.
+  volatile int n_times_per_screen_logging_MoveParticles_completed_before_next_frame_draw_event = 0;
+  volatile int n_times_per_screen_logging_MoveParticles_not_compl_before_next_frame_draw_event = 0;
 
   // Delta time in seconds.
   double dt = kShortDt;
@@ -49,16 +51,16 @@ public:
   double sum_p_energy = 0;        // Only used in below method.
   Logger* logger;
 
-  Atom(int numParticles);
+  explicit Atom(int numParticles);
 
-  void moveParticles();
+  void MoveParticles();
 
   void EnergyLoggingToggle();
   void VelocityLoggingToggle();
 
 private:
   void CalcAveragePotentialEnergy();
-  void CalcEnergyAndLog();
+  void CalcEnergy();
   void AllForcesOnParticle(Particle * part_ptr);
 };
 

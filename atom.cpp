@@ -1,5 +1,6 @@
 #include "atom.h"
 
+#include <atomic>
 #include <cassert>
 #include <cstdlib> // For rand()
 #include <iostream>
@@ -42,7 +43,7 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
         p->color[2] = std::rand() % 245;
         if (i == 0) {
           p->vel[1] = -1e4;
-          p->pos[0] = - kBohrRadius;
+          p->pos[0] = -p->max_dist_allow * 0.95;
           p->color[0] = 255;
           p->color[1] = 120;
           p->color[2] = 120;
@@ -54,6 +55,9 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
         p->color[1] =   0 + (std::rand() % 240);
         p->color[2] = 151 + (std::rand() % 105);
         p->vel[1] = 1e4;
+        if (i == 1) {
+          p->pos[0] = 0;
+        }
       }
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " " << int(p->color[2]);
@@ -88,21 +92,26 @@ void Atom::CalcAveragePotentialEnergy() {
     potential_energy_average = sum_p_energy / (kPFrequencySubDivisions - 1);
   }
 
-void Atom::CalcEnergyAndLog() {
+void Atom::CalcEnergy() {
     // Calculate potential energy.
     total_potential_energy = 0;
     total_kinetic_energy = 0;
     double closest = 1;  // meters.  Just setting to a large number.
 
-    // Potential energy = sum of all potential energies.
+  assert(pars[0]->dist_mag_all[1] != 0);
+
+  // Potential energy = sum of all potential energies.
     // Set the potential energy for each pair of particles.
     for (int i = 0; i < num_particles; ++i) {
       Particle *w1 = pars[i];   // Wave 1
       total_kinetic_energy += 0.5 * w1->mass_kg * w1->vel_mag2;
       for (int j = i + 1; j < num_particles; ++j) {
         Particle *w2 = pars[j];   // Wave 2
-        assert(w1->dist_mag[j] != 0);
-        total_potential_energy += kCoulomb * w1->freq_charge * w2->freq_charge / w1->dist_mag[j];
+        if(w1->dist_mag_all[j] == 0) {
+          std::cout << "\t\t w1->dist_mag_all[j] " << w1->dist_mag_all[j] << std::endl;
+          assert(w1->dist_mag_all[j] != 0);
+        }
+        total_potential_energy += kCoulomb * w1->freq_charge * w2->freq_charge / w1->dist_mag_all[j];
       }
       // If the electron is interesting because it is close to a proton than give it preferential logging.
       if (w1->is_electron && w1->dist_mag_closest < kCloseToTrouble
@@ -118,23 +127,21 @@ void Atom::CalcEnergyAndLog() {
     // Alternatively could just use average charge.
     CalcAveragePotentialEnergy();
     total_energy = potential_energy_average + total_kinetic_energy;
-
-    for (int i = 0; i < num_particles; ++i) {
-      logger->LogStuff(pars[i]);
-    }
   }
 
 void Atom::AllForcesOnParticle(Particle * part_ptr) {
-    int part_num = part_ptr->id;
     part_ptr->InitVarsToCalcForces();
+    int part_num = part_ptr->id;
     for (int i = 0; i < num_particles; ++i) {
       if (i == part_num) continue;
       part_ptr->CalcForcesFromParticle(pars[i]);
     }
+    assert(pars[0]->dist_mag_all[1] != 0);
   }
 
+
   // Called once for every screen draw.
-void Atom::moveParticles() {
+void Atom::MoveParticles() {
     double pos_change_per_particle[kMaxParticles];
     for (int j = 0; j < num_particles; ++j) {
       pos_change_per_particle[j] = 0;
@@ -144,10 +151,11 @@ void Atom::moveParticles() {
       pars[i]->CheckForEscape();
     }
     // Do until we get significant movement, then wait for screen draw.
-    for (int iter = 0; iter<(4096 * 2) && !screen_draw_event_occurred; ++iter) {
+    // If frame_draw_event_occurred then we are over our computation budget.
+    for (int iter = 0; iter<(4096*2) && !frame_draw_event_occurred; ++iter) {
+      // Initialize thread unsafe variables.
       for (int i = 0; i < num_particles; ++i) {
         Particle * wave_ptr = pars[i];
-        wave_ptr->freq_charge = wave_ptr->ChargeSinusoidal();
         for (int j = 0; j < num_particles; ++j) {
           wave_ptr->dist_calcs_done[j] = false;
         }
@@ -155,22 +163,27 @@ void Atom::moveParticles() {
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         AllForcesOnParticle(part_ptr);
+
+        assert(pars[0]->dist_mag_all[1] != 0);
+
         part_ptr->ApplyForcesToParticle();
         pos_change_per_particle[j] += std::abs(pars[j]->pos_change_magnitude);
       }
+      assert(pars[0]->dist_mag_all[1] != 0);
 
       // Find the shortest dt and set the new dt to that.
       dt = pars[0]->new_dt;
       for (int j = 1; j < num_particles; ++j) {
         dt = std::min(pars[j]->new_dt, dt);
       }
-      // std::cout << "\t dt " << std::scientific << dt << std::endl;
-      CalcEnergyAndLog();
+      assert(pars[0]->dist_mag_all[1] != 0);
+
+      CalcEnergy();
+      for (int i = 0; i < num_particles; ++i) {
+        logger->LogStuff(pars[i]);
+      }
       time_ += dt;
       count++;      // Num iterations of move particles.
-      if (count >= 1124831) {
-        if (dt > 1) std::cout << ".";
-      }
 
       for (int j = 0; j < num_particles; ++j) {
         // Lets not move faster than it would take an electron to go from center to edge,
@@ -180,7 +193,6 @@ void Atom::moveParticles() {
           return;
         }
       }
-      // If screen_draw_event_occurred then we are over our computation budget.
     }
   }
 

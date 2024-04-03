@@ -30,6 +30,7 @@ Particle::Particle(int id, bool is_electron, Atom* a,
                      tee(tee_logger.get_stream())
   {
     log_count = is_electron ? 2 : 0;
+    log_count = 1;
     std::cout << "\t" << (is_electron ? "electron" : "proton") << " " << id
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
@@ -92,7 +93,7 @@ void Particle::ConsiderLoggingToFile(int count) {
           }
         }
       }
-      std::string log_line_str = logger->FormatLogLine(this);
+      std::string log_line_str = logger->FormatLogLine(this, true);
       log_file << log_line_str << log_source << std::endl;
       prev_fast_fraction = fast_fraction;
       log_count--;
@@ -178,9 +179,10 @@ void Particle::ConsiderLoggingToFile(int count) {
       magnet_force = 0;
     }
     for (int i=0; i<a_->num_particles; ++i) {
-      dist_mag [i] = 0;       // Will assert if we test and find these values.
-      dist_mag2[i] = 0;
+      dist_mag_all [i] = 0;       // Will assert if we test and find these values.
+      dist_mag_all2[i] = 0;
     }
+    freq_charge = ChargeSinusoidal();
   }
 
   // Calculate the magnetic force caused by:
@@ -198,7 +200,8 @@ void Particle::ConsiderLoggingToFile(int count) {
   // The electric fields do, so you would think the magnetic fields should also.
   void Particle::
   MagneticForce(Particle *oth, double e_field_magnitude_oth, double q2,
-                         double *dist_vector, double dist_mag_2, double *dist_unit_vector) {
+                         double *dist_vector, double dist_mag_2,
+                         const double *dist_unit_vector) {
     // Save some CPU processing time when we are in slow mode, by ignoring the insignificant magnetic force.
     if (a_->dt <= kShortDt) return;
     // Constants for calculating magnetic force.
@@ -261,29 +264,34 @@ void Particle::ConsiderLoggingToFile(int count) {
     for (int i = 0; i < 3; ++i) {
       dist[i] = pos[i] - oth->pos[i];
     }
+
     double dist_magn;
     double dist_magn2;
     // If we have already done the calcs, then use the cached values in the other standing wave.
     if (oth->dist_calcs_done[oth_id]) {
-      dist_magn  = oth->dist_mag [id];
-      dist_magn2 = oth->dist_mag2[id];
-      dist_mag [oth_id] = dist_magn;
-      dist_mag2[oth_id] = dist_magn2;
+      dist_magn  = oth->dist_mag_all [id];
+      dist_magn2 = oth->dist_mag_all2[id];
+      dist_mag_all [oth_id] = dist_magn;
+      dist_mag_all2[oth_id] = dist_magn2;
       dist_calcs_done[id] = true;
+      assert(a_->pars[0]->dist_mag_all[1] != 0);
     } else {
       dist_magn2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
       dist_magn  = sqrt(dist_magn2);
-      dist_mag [oth_id] = dist_magn;  // Alternatively could just set dist_mag for other rather than mess with arrays,
-      dist_mag2[oth_id] = dist_magn2; // but that may have concurrency issue(s).
+      dist_mag_all [oth_id] = dist_magn;  // Alternatively could just set dist_mag_all for other rather than mess with arrays,
+      dist_mag_all2[oth_id] = dist_magn2; // but that may have concurrency issue(s).
       dist_calcs_done[oth_id] = true;
+      assert(a_->pars[0]->dist_mag_all[1] != 0);
     }
     assert(dist_magn  > 0);  // Since we can't handle infinite forces, lets assume this is always true.
     assert(dist_magn2 > 0);  // Since we can't handle infinite forces, lets assume this is always true.
+    assert(a_->pars[0]->dist_mag_all[1] != 0);
 
     double dist_unit_vector[3];
     for (int i = 0; i < 3; ++i) {
       dist_unit_vector[i] = dist[i] / dist_magn;
     }
+    assert(a_->pars[0]->dist_mag_all[1] != 0);
     // Current charge varies based on frequency and time.
     double other_charge = oth->freq_charge;
     double e_field_magnitude_oth = kCoulomb * other_charge / dist_magn;
@@ -292,10 +300,12 @@ void Particle::ConsiderLoggingToFile(int count) {
     for (int i = 0; i < 3; ++i) {
       eforce[i] = eforce_magnitude * dist_unit_vector[i];
     }
+    assert(a_->pars[0]->dist_mag_all[1] != 0);
     // Possible optimization is to calculate magnetic force in separate thread.
     // Another possibility is to skip it or use cached values,
     // it doesn't change significantly, since it is negligible / insignificant.
     MagneticForce(oth, e_field_magnitude_oth, other_charge, dist, dist_magn2, dist_unit_vector);
+    assert(a_->pars[0]->dist_mag_all[1] != 0);
 
     for (int i = 0; i < 3; ++i) {
       forces[i] += eforce[i] + magnet_fs[i];
@@ -312,7 +322,9 @@ void Particle::ConsiderLoggingToFile(int count) {
         dist_closest[i] = dist[i];
       }
       force_mag_closest = force_magnitude;
+      assert(a_->pars[0]->dist_mag_all[1] != 0);
     }
+    assert(a_->pars[0]->dist_mag_all[1] != 0);
   }
 
 
@@ -353,9 +365,9 @@ void Particle::ConsiderLoggingToFile(int count) {
       } else if (a_->total_energy_cap != 0
               && a_->total_energy_cap < a_->total_energy) {
         energy_dissipated = true;
-        for (int i = 0; i < 3; ++i) {
+        for (double & v : vel) {
           // Will cause total energy to drop.
-          vel[i] *= 0.999999;  // Combat energy gain.  Dissipate energy when heading away.
+          v *= 0.999999;  // Combat energy gain.  Dissipate energy when heading away.
         }
       }
     }

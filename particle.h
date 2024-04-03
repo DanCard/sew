@@ -24,7 +24,7 @@ class Particle {
 public:
   const int id;            // Unique id for each particle.
   const bool is_electron;  // Only used for logging.
-  Atom* a_;                 // The atom this particle belongs to.
+  Atom* a_;                // The atom this particle belongs to.
 
   const double mass_mev;
   const double mass_kg;
@@ -56,8 +56,8 @@ public:
   double pos_change_magnitude;
 
   volatile bool dist_calcs_done[sew::kMaxParticles];
-  volatile double dist_mag [kMaxParticles];  // Cache distance calcs to use by other threads.
-  volatile double dist_mag2[kMaxParticles];
+  volatile double dist_mag_all [kMaxParticles];  // Cache distance calcs to use by other threads.
+  volatile double dist_mag_all2[kMaxParticles];
   // Distance from closest attracted particle.
   // Usually this is the distance from particle exerting largest force.
   // Exception is when closest has zero charge.
@@ -158,7 +158,7 @@ public:
   // The electric fields do, so you would think the magnetic fields should also.
   void
   MagneticForce(Particle *oth, double e_field_magnitude_oth, double q2,
-                         double *dist_vector, double dist_mag_2, double *dist_unit_vector);
+                         double *dist_vector, double dist_mag_2, const double *dist_unit_vector);
 
   void CalcForcesFromParticle(Particle* oth /* other particle */);
 
