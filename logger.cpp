@@ -67,9 +67,9 @@ namespace sew {
     }
     log_line
         // Late.  Drawing event already occurred.
-      << " L "    << std::setw( 2) << a_->n_times_per_screen_logging_MoveParticles_not_compl_before_next_frame_draw_event
+      << " L "    << std::setw( 2) << a_->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event
         // Early. Waited on drawing event.
-      << " E "    << std::setw( 2) << a_->n_times_per_screen_logging_MoveParticles_completed_before_next_frame_draw_event
+      << " E "    << std::setw( 2) << a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event
     ;
     /*
     for (int i=0; i<num_particles_; ++i) {
@@ -97,8 +97,8 @@ namespace sew {
         w->log_prev_log_lines(1);
       }
       std::string log_line_str = FormatLogLine(w, false);
-      a_->n_times_per_screen_logging_MoveParticles_not_compl_before_next_frame_draw_event = 0;
-      a_->n_times_per_screen_logging_MoveParticles_completed_before_next_frame_draw_event = 0;
+      a_->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event = 0;
+      a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event = 0;
       w->tee << log_line_str << std::endl;
       last_log_time = now;
       w_to_log_id = (w_to_log_id + 1) % a_->num_particles;

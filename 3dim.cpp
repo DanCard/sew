@@ -44,11 +44,11 @@ public:
   // Destructor
   ~ThreeDim() {
     move_particles_thread_run = false;
-    _animation = false;
+    animation_running = false;
     NotifyDrawEvent();  // Inform thread to stop waiting on draw event.
-    // std::cout << "\t Requesting moveParticles() thread to terminate." << std::endl;
+    // std::cout << "\t Requesting MoveParticlesThread() thread to terminate." << std::endl;
 
-    moveParticlesThread.join();
+    move_particles_thread.join();
   }
 
 
@@ -61,7 +61,7 @@ protected:
   void mouseMoveEvent(MouseMoveEvent& event) override;
   void mouseScrollEvent(MouseScrollEvent& event) override;
 
-  void moveParticles();
+  void MoveParticlesThread();
   void drawSpheres();
 
   Containers::Optional<ArcBall> _arcballCamera;
@@ -71,7 +71,7 @@ protected:
   Containers::Array<Vector3> _spherePositions;
   Containers::Array<Vector3> _sphereVelocities;
   Float _sphereRadius, _sphereVelocity;
-  bool _animation = true;
+  bool animation_running = true;
 
   /* Profiling */
   DebugTools::FrameProfilerGL _profiler{
@@ -87,7 +87,7 @@ protected:
 private:
   sew::Atom * atom = new sew::Atom(0);  // Stupid initialization because of compiler error.
   UnsignedInt numSpheres;    // Number of subatomic particles to simulate in the atom.
-  std::thread moveParticlesThread;
+  std::thread move_particles_thread;
   volatile bool move_particles_thread_run = true;
   void NotifyDrawEvent();
 };
@@ -195,23 +195,24 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   }
   assert(atom_ptr == atom->pars[0]->a_);
   // Start thread to move particles.
-  moveParticlesThread = std::thread(&ThreeDim::moveParticles, this);
-  // moveParticlesThread.detach(); // Avoids terminal error: terminate called without an active exception
+  move_particles_thread = std::thread(&ThreeDim::MoveParticlesThread, this);
+  // move_particles_thread.detach(); // Avoids terminal error: terminate called without an active exception
 }
 
 std::mutex mutually_exclusive_lock;
 std::condition_variable condition_var;
 
-void ThreeDim::moveParticles() {
+/*
+void ThreeDim::MoveParticlesThread() {
   bool just_waited = false;
   while (move_particles_thread_run) {
-    while (atom->screen_draw_event_occurred && _animation) {
+    while (atom->screen_draw_event_occurred && animation_running) {
       atom->screen_draw_event_occurred = false;
       if (!just_waited)                       // Only used for logging.
         atom->num_drawing_event_already += 1;
       just_waited = false;                    // Only used for logging.
 
-      atom->moveParticles();
+      atom->MoveParticlesThread();
     }
     atom->num_wait_for_drawing_event += 1;     // Only used for logging.
     just_waited = true;                       // Only used for logging.
@@ -221,11 +222,37 @@ void ThreeDim::moveParticles() {
       condition_var.wait(lk, [this]{return atom->screen_draw_event_occurred;});
     }
   }
-  // std::cout << "\t moveParticles() thread terminating as requested." << std::endl;
+  // std::cout << "\t MoveParticlesThread() thread terminating as requested." << std::endl;
+}
+*/
+
+
+// Below runs as a separate thread.  Runs at most once for each frame draw.
+void ThreeDim::MoveParticlesThread() {
+  while (move_particles_thread_run) {
+    // Execute atom move particles on every frame draw event.
+    // Don't re-execute atom MoveParticles() without a frame draw event.
+    // This enables slowing down the simulation so electrons don't move too fast.
+    while (atom->frame_draw_event_occurred && animation_running) {
+      atom->frame_draw_event_occurred = false;
+      atom->MoveParticles();
+      // Did MoveParticles() executed longer than it took to draw a frame?
+      if (atom->frame_draw_event_occurred)
+           ++atom->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event;
+      else ++atom->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event;
+    }
+    {
+      // Grab a lock and wait for the next screen draw event.
+      std::unique_lock<std::mutex> lk(mutually_exclusive_lock);
+      condition_var.wait(lk);
+    }
+  }
+  // std::cout << "\t MoveParticles() thread terminating as requested." << std::endl;
 }
 
+
 void ThreeDim::NotifyDrawEvent() {
-  atom->screen_draw_event_occurred = true;
+  atom->frame_draw_event_occurred = true;
   std::lock_guard<std::mutex> lk(mutually_exclusive_lock);
   condition_var.notify_one();
 }
@@ -236,8 +263,8 @@ void ThreeDim::drawEvent() {
   GL::defaultFramebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth);
   _profiler.beginFrame();
 
-  if(_animation) {
-    // atom.moveParticles();
+  if(animation_running) {
+    // atom.MoveParticlesThread();
     for (int i=0; i<numSpheres; i++) {
       for (int j=0; j<3; j++) {
         _spherePositions[i][j] = static_cast<float>(atom->pars[i]->pos[j] / kScale);
@@ -256,7 +283,7 @@ void ThreeDim::drawEvent() {
   swapBuffers();
 
   /* If the camera is moving or the animation is running, redraw immediately */
-  if(moving || _animation) redraw();
+  if(moving || animation_running) redraw();
 }
 
 void ThreeDim::drawSpheres() {
@@ -295,7 +322,7 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
     } else if(event.key() == KeyEvent::Key::V) {
         atom->VelocityLoggingToggle();
     } else if(event.key() == KeyEvent::Key::Space) {
-        _animation ^= true;
+        animation_running ^= true;
 
     } else return;
 

@@ -32,8 +32,8 @@ public:
   // compute budget per frame.
   // Number of times per screen logging that MoveParticles() completed before
   // next frame draw event.
-  volatile int n_times_per_screen_logging_MoveParticles_completed_before_next_frame_draw_event = 0;
-  volatile int n_times_per_screen_logging_MoveParticles_not_compl_before_next_frame_draw_event = 0;
+  volatile int n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event = 0;
+  volatile int n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event = 0;
 
   // Delta time in seconds.
   double dt = kShortDt;

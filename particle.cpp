@@ -274,24 +274,21 @@ void Particle::ConsiderLoggingToFile(int count) {
       dist_mag_all [oth_id] = dist_magn;
       dist_mag_all2[oth_id] = dist_magn2;
       dist_calcs_done[id] = true;
-      assert(a_->pars[0]->dist_mag_all[1] != 0);
     } else {
       dist_magn2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
       dist_magn  = sqrt(dist_magn2);
       dist_mag_all [oth_id] = dist_magn;  // Alternatively could just set dist_mag_all for other rather than mess with arrays,
       dist_mag_all2[oth_id] = dist_magn2; // but that may have concurrency issue(s).
       dist_calcs_done[oth_id] = true;
-      assert(a_->pars[0]->dist_mag_all[1] != 0);
     }
     assert(dist_magn  > 0);  // Since we can't handle infinite forces, lets assume this is always true.
     assert(dist_magn2 > 0);  // Since we can't handle infinite forces, lets assume this is always true.
-    assert(a_->pars[0]->dist_mag_all[1] != 0);
 
     double dist_unit_vector[3];
     for (int i = 0; i < 3; ++i) {
       dist_unit_vector[i] = dist[i] / dist_magn;
     }
-    assert(a_->pars[0]->dist_mag_all[1] != 0);
+
     // Current charge varies based on frequency and time.
     double other_charge = oth->freq_charge;
     double e_field_magnitude_oth = kCoulomb * other_charge / dist_magn;
@@ -300,12 +297,11 @@ void Particle::ConsiderLoggingToFile(int count) {
     for (int i = 0; i < 3; ++i) {
       eforce[i] = eforce_magnitude * dist_unit_vector[i];
     }
-    assert(a_->pars[0]->dist_mag_all[1] != 0);
+
     // Possible optimization is to calculate magnetic force in separate thread.
     // Another possibility is to skip it or use cached values,
     // it doesn't change significantly, since it is negligible / insignificant.
     MagneticForce(oth, e_field_magnitude_oth, other_charge, dist, dist_magn2, dist_unit_vector);
-    assert(a_->pars[0]->dist_mag_all[1] != 0);
 
     for (int i = 0; i < 3; ++i) {
       forces[i] += eforce[i] + magnet_fs[i];
@@ -322,9 +318,7 @@ void Particle::ConsiderLoggingToFile(int count) {
         dist_closest[i] = dist[i];
       }
       force_mag_closest = force_magnitude;
-      assert(a_->pars[0]->dist_mag_all[1] != 0);
     }
-    assert(a_->pars[0]->dist_mag_all[1] != 0);
   }
 
 
@@ -445,8 +439,8 @@ void Particle::ConsiderLoggingToFile(int count) {
     if (is_electron) {
       // dot product between dist of closest and velocity.
       dist_vel_dot_prod = dist_unit_vec[0] * vel_unit_vec[0] +
-                         dist_unit_vec[1] * vel_unit_vec[1] +
-                         dist_unit_vec[2] * vel_unit_vec[2];
+                          dist_unit_vec[1] * vel_unit_vec[1] +
+                          dist_unit_vec[2] * vel_unit_vec[2];
     }
     // Calc position unit vector
     pos_magnitude = sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]);

@@ -15,7 +15,9 @@
 
 namespace sew {
 
-const double kC = 299792458;  // m/s.  Speed of light
+typedef float SFloat;
+
+const SFloat kC = 299792458;  // m/s.  Speed of light
 const double kCoulomb = 8987551787.3681764;       // N * m^2 / C^2
                                     // https://en.wikipedia.org/wiki/Electron
 const double kQ = 1.602176634e-19;  // Charge of a particle in Coulombs

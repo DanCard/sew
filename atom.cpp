@@ -98,9 +98,7 @@ void Atom::CalcEnergy() {
     total_kinetic_energy = 0;
     double closest = 1;  // meters.  Just setting to a large number.
 
-  assert(pars[0]->dist_mag_all[1] != 0);
-
-  // Potential energy = sum of all potential energies.
+    // Potential energy = sum of all potential energies.
     // Set the potential energy for each pair of particles.
     for (int i = 0; i < num_particles; ++i) {
       Particle *w1 = pars[i];   // Wave 1
@@ -109,7 +107,6 @@ void Atom::CalcEnergy() {
         Particle *w2 = pars[j];   // Wave 2
         if(w1->dist_mag_all[j] == 0) {
           std::cout << "\t\t w1->dist_mag_all[j] " << w1->dist_mag_all[j] << std::endl;
-          assert(w1->dist_mag_all[j] != 0);
         }
         total_potential_energy += kCoulomb * w1->freq_charge * w2->freq_charge / w1->dist_mag_all[j];
       }
@@ -136,7 +133,6 @@ void Atom::AllForcesOnParticle(Particle * part_ptr) {
       if (i == part_num) continue;
       part_ptr->CalcForcesFromParticle(pars[i]);
     }
-    assert(pars[0]->dist_mag_all[1] != 0);
   }
 
 
@@ -160,23 +156,20 @@ void Atom::MoveParticles() {
           wave_ptr->dist_calcs_done[j] = false;
         }
       }
+
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         AllForcesOnParticle(part_ptr);
 
-        assert(pars[0]->dist_mag_all[1] != 0);
-
         part_ptr->ApplyForcesToParticle();
         pos_change_per_particle[j] += std::abs(pars[j]->pos_change_magnitude);
       }
-      assert(pars[0]->dist_mag_all[1] != 0);
 
       // Find the shortest dt and set the new dt to that.
       dt = pars[0]->new_dt;
       for (int j = 1; j < num_particles; ++j) {
         dt = std::min(pars[j]->new_dt, dt);
       }
-      assert(pars[0]->dist_mag_all[1] != 0);
 
       CalcEnergy();
       for (int i = 0; i < num_particles; ++i) {
