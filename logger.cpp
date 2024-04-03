@@ -23,7 +23,7 @@ namespace sew {
   }
 
   void Logger::FastLoggingToggle() {
-    fast_logging =!fast_logging;
+    fast_logging = !fast_logging;
   }
 
   void Logger::FrameDrawStatisticsLoggingToggle() {
@@ -31,11 +31,15 @@ namespace sew {
   }
 
   void Logger::IterationsLoggingToggle() {
-    iterations_logging =!iterations_logging;
+    iterations_logging = !iterations_logging;
   }
 
   void Logger::PositionLoggingToggle() {
-    position_logging =!position_logging;
+    position_logging = !position_logging;
+  }
+
+  void Logger::PercentEnergyDissipatedLoggingToggle() {
+    percent_energy_dissipated_logging = !percent_energy_dissipated_logging;
   }
 
   void Logger::VelocityLoggingToggle() {
@@ -65,9 +69,12 @@ namespace sew {
     if (fast_logging) {
       log_line << " fast"  << std::setw(10) << std::setprecision(3) << w->fast_fraction;
     }
+    if (percent_energy_dissipated_logging) {
+      log_line << std::setw(10) << percent_energy_dissipated_logging;
+    }
     log_line
       << std::setprecision(2)
-      << "  f "    << std::setw( 9) << w->force_mag_closest
+      << "  f"    << std::setw(9) << w->force_mag_closest
    // << Log3dArray(forces  , " fs")
    // << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) + pow(b_force_by_oth_vel[2], 2))
    // << " Bi " << std::setw( 9) << sqrt(pow(b_f_intrinsic[0], 2) + pow(b_f_intrinsic[1], 2) + pow(b_f_intrinsic[2], 2))
@@ -88,9 +95,9 @@ namespace sew {
     if (energy_logging || to_file) {
       log_line << std::scientific << std::setprecision(2)
         // P energy goes negative, that is why width is larger.
-        << "  pe"   << std::setw(10) << a_->potential_energy_average
-        << " ke"    << std::setw( 9) << a_->total_kinetic_energy
-        << " te"    << std::setw( 9) << a_->total_energy;
+        << "  pe" << std::setw(10) << a_->potential_energy_average
+        << " ke"  << std::setw( 9) << a_->total_kinetic_energy
+        << " te"  << std::setw( 9) << a_->total_energy;
     }
     if (frame_draw_statistics_logging) {
       log_line
@@ -102,7 +109,7 @@ namespace sew {
               << a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event;
     }
     if (iterations_logging) {
-      log_line << " i " << a_->iter;
+      log_line << " i" << std::setw(5) << a_->iter;
     }
     /*
     for (int i=0; i<num_particles_; ++i) {
@@ -141,5 +148,4 @@ namespace sew {
     // Didn't log to screen so consider logging to just file.
     w->ConsiderLoggingToFile(a_->count);
   }
-
 } // namespace

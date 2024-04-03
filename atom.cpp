@@ -212,8 +212,13 @@ void Atom::MoveParticles() {
     logger->PositionLoggingToggle();
   }
 
+  void Atom::PercentEnergyDissipatedLoggingToggle() {
+    logger->PercentEnergyDissipatedLoggingToggle();
+  }
+
   void Atom::VelocityLoggingToggle() {
     logger->VelocityLoggingToggle();
   }
+
 
 } // namespace

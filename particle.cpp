@@ -207,6 +207,7 @@ void Particle::ConsiderLoggingToFile(int count) {
                          const SFloat *dist_unit_vector) {
     // Save some CPU processing time when we are in slow mode, by ignoring the insignificant magnetic force.
     if (a_->dt <= kShortDt) return;
+    if (fast_fraction <= 0.1 && a_->count%32 != 0) return;
     // Constants for calculating magnetic force.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
@@ -328,9 +329,10 @@ void Particle::ConsiderLoggingToFile(int count) {
   // When forces are very high we should slow down delta time (dt) to make calculations more accurate.
   void Particle::NewDt(SFloat * fast_fraction_ptr) {
     // Simulation will slow down alot below this distance.  Will make simulation more accurate.
-    const SFloat kSmallDtDistance = kCloseToTrouble * 2;
+    const SFloat kSmallDtDistance = kCloseToTrouble * 3
+            ;
     // Simulation will slow down when particles are closer than this.  Will make simulation more accurate.
-    const SFloat safe_distance = kBohrRadius;
+    const SFloat safe_distance = kBohrRadius / 2;
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
     // fast_fraction < 0 when distance shorter than kCloseToTrouble.
@@ -364,7 +366,10 @@ void Particle::ConsiderLoggingToFile(int count) {
         energy_dissipated = true;
         for (SFloat & v : vel) {
           // Will cause total energy to drop.
-          v *= 0.999999;  // Combat energy gain.  Dissipate energy when heading away.
+          // Should be relative to size of dt.  Small dt less energy loss.
+          // High dt higher energy loss.
+          percent_energy_dissipated = 1 - ((1 - 0.9999) * fast_fraction);
+          v *= percent_energy_dissipated;  // Combat energy gain.  Dissipate energy when heading away.
         }
       }
     }

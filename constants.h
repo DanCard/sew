@@ -42,7 +42,7 @@ const SFloat kEFrequency = kEMassMEv / kHEv;
 const SFloat kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 16;
 // For increased speed avoid lowering.  Instead increase threading.
-const int    kPFrequencySubDivisions = 128;
+const int    kPFrequencySubDivisions = 64;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
 const SFloat kShortDt = 1 / ( kPFrequency * kPFrequencySubDivisions );

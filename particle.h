@@ -103,6 +103,7 @@ public:
   bool flipped_dis_vel_dot_prod = false;  // If true then log
   bool energy_dissipated = false;      // When leaving proton, dissipate energy.
   bool energy_dissipated_prev = false;  // When different from energy_dissipated, then log.
+  SFloat percent_energy_dissipated = 0;
 
   // Infinite force when particles are superimposed on each other.
   // To combat limitations of simulation, teleport the electron to other side of proton.

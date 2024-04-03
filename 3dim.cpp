@@ -167,7 +167,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     _sphereInstanceData[i].color = Color4{(float)p->color[0]/255,
                                           (float)p->color[1]/255,
                                           (float)p->color[2]/255,
-                                          i > numSpheres/2 ? 0.35f : 0.75f};
+                                          i > numSpheres/2 ? 0.30f : 0.7f};
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
@@ -330,6 +330,8 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
         _arcballCamera->reset();
     } else if(event.key() == KeyEvent::Key::V) {
         atom->VelocityLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::Y) {
+      atom->PercentEnergyDissipatedLoggingToggle();
     } else if(event.key() == KeyEvent::Key::Z) {
         atom->FrameDrawStatisticsLoggingToggle();
     } else if(event.key() == KeyEvent::Key::Space) {
@@ -340,6 +342,8 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
     event.setAccepted();
     redraw();
 }
+
+
 
 void ThreeDim::mousePressEvent(MouseEvent& event) {
     /* Enable mouse capture so the mouse can drag outside of the window */

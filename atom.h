@@ -64,6 +64,8 @@ public:
   void PositionLoggingToggle();
   void VelocityLoggingToggle();
 
+    void PercentEnergyDissipatedLoggingToggle();
+
 private:
   void CalcAveragePotentialEnergy();
   void CalcEnergy();
