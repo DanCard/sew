@@ -179,8 +179,9 @@ void Particle::ConsiderLoggingToFile(int count) {
       magnet_force = 0;
     }
     for (int i=0; i<a_->num_particles; ++i) {
-      dist_mag_all [i] = 0;       // Will assert if we test and find these values.
-      dist_mag_all2[i] = 0;
+      dist_mag_all   [i] = 0;       // Will assert if we test and find these values.
+      dist_mag_all2  [i] = 0;
+      dist_calcs_done[i] = false;
     }
     freq_charge = ChargeSinusoidal();
   }

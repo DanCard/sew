@@ -127,7 +127,6 @@ void Atom::CalcEnergy() {
   }
 
 void Atom::AllForcesOnParticle(Particle * part_ptr) {
-    part_ptr->InitVarsToCalcForces();
     int part_num = part_ptr->id;
     for (int i = 0; i < num_particles; ++i) {
       if (i == part_num) continue;
@@ -151,18 +150,18 @@ void Atom::MoveParticles() {
     for (int iter = 0; iter<(4096*2) && !frame_draw_event_occurred; ++iter) {
       // Initialize thread unsafe variables.
       for (int i = 0; i < num_particles; ++i) {
-        Particle * wave_ptr = pars[i];
-        for (int j = 0; j < num_particles; ++j) {
-          wave_ptr->dist_calcs_done[j] = false;
-        }
+        pars[i]->InitVarsToCalcForces();
       }
 
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         AllForcesOnParticle(part_ptr);
+      }
 
+      for (int j = 0; j < num_particles; ++j) {
+        Particle * part_ptr = pars[j];
         part_ptr->ApplyForcesToParticle();
-        pos_change_per_particle[j] += std::abs(pars[j]->pos_change_magnitude);
+        pos_change_per_particle[j] += std::abs(part_ptr->pos_change_magnitude);
       }
 
       // Find the shortest dt and set the new dt to that.

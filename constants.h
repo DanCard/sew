@@ -13,9 +13,9 @@
 #include <thread>
 #include <vector>
 
-namespace sew {
-
 typedef float SFloat;
+
+namespace sew {
 
 const SFloat kC = 299792458;  // m/s.  Speed of light
 const SFloat kCoulomb = 8987551787.3681764;       // N * m^2 / C^2
