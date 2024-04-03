@@ -14,8 +14,28 @@ namespace sew {
 
   Logger::Logger(Atom* a) : a_(a) {}
 
+  void Logger::DtLoggingToggle() {
+    dt_logging = !dt_logging;
+  }
+
   void Logger::EnergyLoggingToggle() {
     energy_logging = !energy_logging;
+  }
+
+  void Logger::FastLoggingToggle() {
+    fast_logging =!fast_logging;
+  }
+
+  void Logger::FrameDrawStatisticsLoggingToggle() {
+    frame_draw_statistics_logging = !frame_draw_statistics_logging;
+  }
+
+  void Logger::IterationsLoggingToggle() {
+    iterations_logging =!iterations_logging;
+  }
+
+  void Logger::PositionLoggingToggle() {
+    position_logging =!position_logging;
   }
 
   void Logger::VelocityLoggingToggle() {
@@ -38,9 +58,16 @@ namespace sew {
       << (w->energy_dissipated ? " *" : "  ") << std::fixed << std::setprecision(1)
       << "d⋅v " << std::setw( 4) << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
       << std::scientific << std::setprecision(2)
-      << "  dt"   << std::setw( 9) << a_->dt    // << " new " << new_dt
-      << " fast"  << std::setw(10) << std::setprecision(3) << w->fast_fraction << std::setprecision(2)
-      << " f "    << std::setw( 9) << w->force_mag_closest
+      ;
+    if (dt_logging) {
+      log_line << "  dt"   << std::setw( 9) << a_->dt;    // << " new " << new_dt
+    }
+    if (fast_logging) {
+      log_line << " fast"  << std::setw(10) << std::setprecision(3) << w->fast_fraction;
+    }
+    log_line
+      << std::setprecision(2)
+      << "  f "    << std::setw( 9) << w->force_mag_closest
    // << Log3dArray(forces  , " fs")
    // << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) + pow(b_force_by_oth_vel[2], 2))
    // << " Bi " << std::setw( 9) << sqrt(pow(b_f_intrinsic[0], 2) + pow(b_f_intrinsic[1], 2) + pow(b_f_intrinsic[2], 2))
@@ -50,27 +77,33 @@ namespace sew {
    // << Log3dArray(acceleration, "a")
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
    // << Log3dArray(pos_change, "chng") << std::setprecision(1)
-      << Log3dArray(w->pos, "pos")
+      << (position_logging ? Log3dArray(w->pos, "pos") : "")
    // << " min pos change " << min_pos_change_desired
    // << round(fast_fraction * 10) * 10 << '%'
                   << std::setw( 6) << std::setprecision(1) << std::fixed 
-      << " chrg"  << std::setw( 4) << int(round((w->freq_charge/w->avg_q)*100)) << '%'
+      << " chrg"  << std::setw( 4) << int(std::round((w->freq_charge/w->avg_q)*100.0f)) << '%'
       << " oth"   << std::setw( 4)
-      << int(round((charge_of_closest / par_closest->q_amplitude) * 100)) << '%';
+      << int(std::round((charge_of_closest / par_closest->q_amplitude) * 100.0f)) << '%';
    // << " inv"   << std::setw(12) << inverse_exponential
-    if (energy_logging) {
+    if (energy_logging || to_file) {
       log_line << std::scientific << std::setprecision(2)
         // P energy goes negative, that is why width is larger.
         << "  pe"   << std::setw(10) << a_->potential_energy_average
         << " ke"    << std::setw( 9) << a_->total_kinetic_energy
         << " te"    << std::setw( 9) << a_->total_energy;
     }
-    log_line
-        // Late.  Drawing event already occurred.
-      << " L "    << std::setw( 2) << a_->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event
-        // Early. Waited on drawing event.
-      << " E "    << std::setw( 2) << a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event
-    ;
+    if (frame_draw_statistics_logging) {
+      log_line
+              // Late.  Drawing event already occurred.
+              << " L " << std::setw(2)
+              << a_->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event
+              // Early. Waited on drawing event.
+              << " E " << std::setw(2)
+              << a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event;
+    }
+    if (iterations_logging) {
+      log_line << " i " << a_->iter;
+    }
     /*
     for (int i=0; i<num_particles_; ++i) {
       if (i == id || i == par_closest_id) continue;
@@ -88,14 +121,12 @@ namespace sew {
     auto now = std::chrono::system_clock::now();
     bool do_log =  w->log_count > 0
      //        || (w->energy_dissipated && !w->energy_dissipated_prev)
-               ||  w->flipped_dis_vel_dot_prod;
+     //        ||  w->flipped_dis_vel_dot_prod
+               ;
     if (do_log || (w->id == w_to_log_id &&
         std::chrono::duration_cast<std::chrono::milliseconds>(
-        now - last_log_time).count() > 1000)) {
+        now - last_log_time).count() > 1200)) {
       SetColorForConsole(w->color[0], w->color[1], w->color[2]);
-      if (w->flipped_dis_vel_dot_prod) {
-        w->log_prev_log_lines(1);
-      }
       std::string log_line_str = FormatLogLine(w, false);
       a_->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event = 0;
       a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event = 0;

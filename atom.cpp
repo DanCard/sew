@@ -147,7 +147,7 @@ void Atom::MoveParticles() {
     }
     // Do until we get significant movement, then wait for screen draw.
     // If frame_draw_event_occurred then we are over our computation budget.
-    for (int iter = 0; iter<(4096*2) && !frame_draw_event_occurred; ++iter) {
+    for (iter = 0; iter<(4096*2) && !frame_draw_event_occurred; ++iter) {
       // Initialize thread unsafe variables.
       for (int i = 0; i < num_particles; ++i) {
         pars[i]->InitVarsToCalcForces();
@@ -188,9 +188,28 @@ void Atom::MoveParticles() {
     }
   }
 
+  void Atom::DtLoggingToggle() {
+    logger->DtLoggingToggle();
+  }
 
   void Atom::EnergyLoggingToggle() {
     logger->EnergyLoggingToggle();
+  }
+
+  void Atom::FastLoggingToggle() {
+    logger->FastLoggingToggle();
+  }
+
+  void Atom::IterationsLoggingToggle() {
+    logger->IterationsLoggingToggle();
+  }
+
+  void Atom::FrameDrawStatisticsLoggingToggle() {
+    logger->FrameDrawStatisticsLoggingToggle();
+  }
+
+  void Atom::PositionLoggingToggle() {
+    logger->PositionLoggingToggle();
   }
 
   void Atom::VelocityLoggingToggle() {

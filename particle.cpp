@@ -61,8 +61,8 @@ void Particle::ConsiderLoggingToFile(int count) {
 
     bool particles_are_close      = dist_mag_closest < (kCloseToTrouble * 2);
     bool particles_are_close_very = dist_mag_closest < kCloseToTrouble;
-    bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1) &&
-            (prev_fast_fraction - fast_fraction > 0.1);
+    bool fast_fraction_changed_significantly = (prev_fast_fraction / fast_fraction > 1.1f) &&
+            (prev_fast_fraction - fast_fraction > 0.1f);
     // Make it difficult for log files to reach gigabyte sizes on long running simulation.
     static int local_count = 0;
     static int ll = 1;  // Limit logging to once every x lines.
@@ -73,11 +73,11 @@ void Particle::ConsiderLoggingToFile(int count) {
     }
     if (log_count > 0 // || true
       ||  count%(ll*32) == 0
-      || (count%(ll*16) == 0 && fast_fraction < 0.1)
-      || (count%(ll* 8) == 0 && fast_fraction < 0.02)
-      || (count%(ll* 4) == 0 && fast_fraction < 0.002  && particles_are_close)
-      || (count%(ll* 2) == 0 && fast_fraction < 0.0002 && particles_are_close_very)
-      || (count% ll     == 0 && vel_mag > danger_speed && particles_are_close_very)
+      || (count%(ll*16) == 0 && fast_fraction < 0.1f)
+      || (count%(ll* 8) == 0 && fast_fraction < 0.02f)
+      || (count%(ll* 4) == 0 && fast_fraction < 0.002f  && particles_are_close)
+      || (count%(ll* 2) == 0 && fast_fraction < 0.0002f && particles_are_close_very)
+      || (count% ll     == 0 && vel_mag  > danger_speed && particles_are_close_very)
       || fast_fraction_changed_significantly
     ) {
       std::string log_source = " ?";
@@ -102,13 +102,14 @@ void Particle::ConsiderLoggingToFile(int count) {
   }
 
   void Particle::HandleEscape() {
-    log_prev_log_lines(1);
-    tee << "\t" << (is_electron ? "electron" : "proton")
+    logger->SetColorForConsole(color[0], color[1], color[2]);
+    tee << "\t" << (is_electron ? "e" : "p") << id
         << " escaped past radius of " << max_dist_allow
         << "  Dist mag from origin : " << distance_mag_from_origin
-        << "  Current velocity " << sqrt(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2])
-        << "  x " << vel[0] << " y " << vel[1] << " z " << vel[2]
-        << "  total energy " << a_->total_energy;
+        << "  Current velocity " << std::sqrt(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2])
+      //<< "  x " << vel[0] << " y " << vel[1] << " z " << vel[2]
+      //<< "  total energy " << a_->total_energy
+      ;
     if (v_when_teleported > 0) {
         tee << "  V when previously teleported: " << v_when_teleported;
     }
@@ -116,7 +117,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     assert(pos[0] != 0 || pos[1] != 0 || pos[2] != 0);
     // We want the magnitude to be under the bohr radius.
     // Distance to shave off.  Subtract 1% to keep things safe.
-    SFloat dist_to_shave = ( max_dist_allow / distance_mag_from_origin ) - 0.05;
+    SFloat dist_to_shave = ( max_dist_allow / distance_mag_from_origin ) - 0.05f;
     // tee << "  dist_to_shave " << dist_to_shave;
     for (SFloat & po : pos) {
       po = po * dist_to_shave;
@@ -125,15 +126,16 @@ void Particle::ConsiderLoggingToFile(int count) {
     // Zero out the biggest velocity or all?
     for (SFloat & v : vel) v = 0;
     log_count = 1;  // Force logging around this event.
-    tee << std::endl;
     if (a_->total_energy_cap == 0) {
-      a_->total_energy_cap = a_->total_energy * 1.2;  // * 1.1 because protons continue gaining energy.
+      a_->total_energy_cap = a_->total_energy * 1.2f;  // * 1.2 because protons continue gaining energy.
+      tee << "  total energy cap set to " << a_->total_energy_cap;
     }
+    tee << std::endl;
   }
 
 
   void Particle::CheckForEscape() {
-    distance_mag_from_origin = sqrt(pow(pos[0], 2) + pow(pos[1], 2) + pow(pos[2], 2));
+    distance_mag_from_origin = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]);
     // If particle escapes, then zero out the velocity.
     // This is a hack to limit the problem of energy gain.
     // https://en.wikipedia.org/wiki/Energy_drift
@@ -164,7 +166,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     // Frequency is kEFrequency or kPFrequency.
     // 
     // Charge = e + e * sin(2 * pi * frequency * time + initial_charge)
-    return avg_q + (q_amplitude * sin((frequency * a_->time_ * 2 * M_PI) + initial_charge));
+    return avg_q + (q_amplitude * std::sin((frequency * a_->time_ * 2.0f * (float)M_PI) + initial_charge));
   }
 
   void Particle::InitVarsToCalcForces() {
@@ -276,8 +278,8 @@ void Particle::ConsiderLoggingToFile(int count) {
       dist_mag_all2[oth_id] = dist_magn2;
       dist_calcs_done[id] = true;
     } else {
-      dist_magn2 = pow(dist[0], 2) + pow(dist[1], 2) + pow(dist[2], 2);
-      dist_magn  = sqrt(dist_magn2);
+      dist_magn2 = dist[0]*dist[0] + dist[1]*dist[1] + dist[2]*dist[2];
+      dist_magn  = std::sqrt(dist_magn2);
       dist_mag_all [oth_id] = dist_magn;  // Alternatively could just set dist_mag_all for other rather than mess with arrays,
       dist_mag_all2[oth_id] = dist_magn2; // but that may have concurrency issue(s).
       dist_calcs_done[oth_id] = true;
@@ -385,7 +387,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     // If the vectors are pointing in the same direction (aligned), their dot product is 1.
     // If they are perpendicular, it's 0. If they are pointing in opposite directions, it's -1.
     // Since we are using distance as a proxy for force, sign is reversed.
-    bool force_same_dir_as_v = dist_vel_dot_prod < -0.75;    // -0.75 = guess
+    bool force_same_dir_as_v = dist_vel_dot_prod < -0.75f;    // -0.75 = guess
     if (!force_same_dir_as_v) return;
 
     close->log_prev_log_lines(1);
@@ -419,13 +421,13 @@ void Particle::ConsiderLoggingToFile(int count) {
   }
 
   void Particle::ApplyForcesToParticle() {
-    force_magnitude = sqrt(pow(forces[0], 2) + pow(forces[1], 2) + pow(forces[2], 2));
+    force_magnitude = std::sqrt(forces[0]*forces[0] + forces[1]*forces[1] + forces[2]*forces[2]);
     for (int i = 0; i < 3; ++i) {
       acceleration[i] = forces[i] / this->mass_kg;
       vel[i] += acceleration[i] * a_->dt;
     }
-    vel_mag2 = pow(vel[0], 2) + pow(vel[1], 2) + pow(vel[2], 2);
-    vel_mag  = sqrt(vel_mag2);
+    vel_mag2 = vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2];
+    vel_mag  = std::sqrt(vel_mag2);
     for (int i = 0; i < 3; ++i) {
       pos_change[i]  = vel[i] * a_->dt;
       if (!kHoldingProtonSteady || is_electron) {
@@ -444,7 +446,7 @@ void Particle::ConsiderLoggingToFile(int count) {
                           dist_unit_vec[2] * vel_unit_vec[2];
     }
     // Calc position unit vector
-    pos_magnitude = sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]);
+    pos_magnitude = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]);
     for (int i = 0; i < 3; ++i) {
       pos_unit_vec[i] = pos[i] / pos_magnitude;
     }
@@ -464,7 +466,8 @@ void Particle::ConsiderLoggingToFile(int count) {
     NewDt(&fast_fraction);
 
     // pos_change_magnitude used to decide if we have moved enough for current frame.
-    pos_change_magnitude = sqrt(pow(pos_change[0], 2) + pow(pos_change[1], 2) + pow(pos_change[2], 2));
+    pos_change_magnitude = std::sqrt(pos_change[0]*pos_change[0]
+                                   + pos_change[1]*pos_change[1] + pos_change[2]*pos_change[2]);
     // When particles are on top of each other forces approach infinity.
     // To get around that problem we teleport to other side of particle.
     // Alternative approach is to have a preprogrammed path and not bother with force calcs.

@@ -41,8 +41,8 @@ class ThreeDim: public Platform::Application {
 public:
   __attribute__((unused)) explicit
   ThreeDim(const Arguments& arguments);
-  // Destructor
-  ~ThreeDim() {
+
+  ~ThreeDim() {  // Destructor
     move_particles_thread_run = false;
     animation_running = false;
     NotifyDrawEvent();  // Inform thread to stop waiting on draw event.
@@ -71,7 +71,7 @@ protected:
   Containers::Array<Vector3> _spherePositions;
   Containers::Array<Vector3> _sphereVelocities;
   Float _sphereRadius, _sphereVelocity;
-  bool animation_running = true;
+  volatile bool animation_running = true;
 
   /* Profiling */
   DebugTools::FrameProfilerGL _profiler{
@@ -233,7 +233,7 @@ void ThreeDim::MoveParticlesThread() {
     // Execute atom move particles on every frame draw event.
     // Don't re-execute atom MoveParticles() without a frame draw event.
     // This enables slowing down the simulation so electrons don't move too fast.
-    while (atom->frame_draw_event_occurred && animation_running) {
+    while (atom->frame_draw_event_occurred && animation_running && move_particles_thread_run) {
       atom->frame_draw_event_occurred = false;
       atom->MoveParticles();
       // Did MoveParticles() executed longer than it took to draw a frame?
@@ -241,6 +241,7 @@ void ThreeDim::MoveParticlesThread() {
            ++atom->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event;
       else ++atom->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event;
     }
+    if (!move_particles_thread_run) break;
     {
       // Grab a lock and wait for the next screen draw event.
       std::unique_lock<std::mutex> lk(mutually_exclusive_lock);
@@ -310,17 +311,27 @@ void ThreeDim::viewportEvent(ViewportEvent& event) {
 }
 
 void ThreeDim::keyPressEvent(KeyEvent& event) {
-    if(event.key() == KeyEvent::Key::E) {
+    if(event.key() == KeyEvent::Key::D) {
+        atom->DtLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::E) {
         atom->EnergyLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::F) {
+        atom->FastLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::I) {
+        atom->IterationsLoggingToggle();
     } else if(event.key() == KeyEvent::Key::O) {
         if(_profiler.isEnabled()) _profiler.enable();
     } else if(event.key() == KeyEvent::Key::P) {
+        atom->PositionLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::Q) {
         if(_profiler.isEnabled()) _profiler.disable();
         else _profiler.enable();
     } else if(event.key() == KeyEvent::Key::R) {
         _arcballCamera->reset();
     } else if(event.key() == KeyEvent::Key::V) {
         atom->VelocityLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::Z) {
+        atom->FrameDrawStatisticsLoggingToggle();
     } else if(event.key() == KeyEvent::Key::Space) {
         animation_running ^= true;
 

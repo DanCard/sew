@@ -50,12 +50,18 @@ public:
   int    pot_energy_cycle_index = 0;
   SFloat sum_p_energy = 0;        // Only used in below method.
   Logger* logger;
+  int iter = 0;   // Number of iterations to get significant movement.
 
   explicit Atom(int numParticles);
 
   void MoveParticles();
 
+  void DtLoggingToggle();
   void EnergyLoggingToggle();
+  void FastLoggingToggle();
+  void FrameDrawStatisticsLoggingToggle();
+  void IterationsLoggingToggle();
+  void PositionLoggingToggle();
   void VelocityLoggingToggle();
 
 private:

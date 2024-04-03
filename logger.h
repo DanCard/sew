@@ -28,11 +28,20 @@ public:
 
   explicit Logger(Atom* a);
 
+  bool dt_logging = false;
   bool energy_logging = false;
-  bool velocity_logging = true;
+  bool fast_logging = false;
+  bool frame_draw_statistics_logging = false;
+  bool iterations_logging = true;
+  bool position_logging = false;
+  bool velocity_logging = false;
+  void DtLoggingToggle();
   void EnergyLoggingToggle();
+  void FastLoggingToggle();
+  void FrameDrawStatisticsLoggingToggle();
+  void IterationsLoggingToggle();
+  void PositionLoggingToggle();
   void VelocityLoggingToggle();
-
 
   static void SetColorForConsole(unsigned char r, unsigned char g, unsigned char b) {
     printf("\x1b[38;2;%d;%d;%dm", r, g, b);
