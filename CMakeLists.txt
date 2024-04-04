@@ -17,6 +17,8 @@ find_package(Magnum REQUIRED
     Shaders
     Sdl2Application)
 
+find_package(TBB REQUIRED)
+
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 
 add_executable(test-particles
@@ -50,7 +52,8 @@ target_link_libraries(3dim PRIVATE
     Magnum::Magnum
     Magnum::MeshTools
     Magnum::Primitives
-    Magnum::Shaders)
+    Magnum::Shaders
+    TBB::tbb)
 
 install(TARGETS 3dim DESTINATION ${MAGNUM_BINARY_INSTALL_DIR})
 

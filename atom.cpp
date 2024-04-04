@@ -4,6 +4,8 @@
 #include <cassert>
 #include <cstdlib> // For rand()
 #include <iostream>
+#include <tbb/parallel_for.h>
+// #define USE_INTEL_THREADING
 #include <thread>
 #include <vector>
 
@@ -153,11 +155,15 @@ void Atom::MoveParticles() {
         pars[i]->InitVarsToCalcForces();
       }
 
+#ifdef USE_INTEL_THREADING
+      // Use Intel Threading Library.
+      //#pragma omp parallel for
+#else
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         AllForcesOnParticle(part_ptr);
       }
-
+#endif
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
         part_ptr->ApplyForcesToParticle();
