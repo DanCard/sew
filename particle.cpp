@@ -28,7 +28,6 @@ Particle::Particle(int id, bool is_electron, Atom* a,
           tee_logger(is_electron ? "e" + std::to_string(id) + ".log"
                                  : "p" + std::to_string(id) + ".log"),
                      tee(tee_logger.get_stream()) {
-    log_count = is_electron ? 2 : 0;
     log_count = 1;
     std::cout << "\t" << (is_electron ? "electron" : "proton") << " " << id
       << "\t frequency " << frequency << "  "
@@ -104,7 +103,8 @@ void Particle::ConsiderLoggingToFile(int count) {
   void Particle::HandleEscape() {
     logger->SetColorForConsole(color[0], color[1], color[2]);
     tee << "\t" << (is_electron ? "e" : "p") << id
-        << " escaped.  Current velocity " << std::sqrt(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2])
+        << " escaped.  Distance " << distance_mag_from_origin << "  allowed " << max_dist_allow
+        << "  Current velocity " << std::sqrt(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2])
         << "  total energy " << a_->total_energy
       ;
     if (v_when_teleported > 0) {
@@ -114,7 +114,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     assert(pos[0] != 0 || pos[1] != 0 || pos[2] != 0);
     // We want the magnitude to be under the bohr radius.
     // Distance to shave off.  Subtract 1% to keep things safe.
-    SFloat dist_to_shave = ( max_dist_allow / distance_mag_from_origin ) - 0.05f;
+    SFloat dist_to_shave = ( max_dist_allow / distance_mag_from_origin ) - 0.01f;
     // tee << "  dist_to_shave " << dist_to_shave;
     for (SFloat & po : pos) {
       po = po * dist_to_shave;
@@ -393,12 +393,14 @@ void Particle::ConsiderLoggingToFile(int count) {
         << "  distance velocity dot product " << dist_vel_dot_prod
         << "  force magnitude " << force_magnitude
         << " x " << forces[0] << " y " << forces[1] << " z " << forces[2] << std::endl;
+    /*
     tee << " velocity unit vector: x " << vel_unit_vec[0]
                               << " y " << vel_unit_vec[1]
                               << " z " << vel_unit_vec[2]
         << " distance unit vector: x " << dist_unit_vec[0]
                               << " y " << dist_unit_vec[1]
                               << " z " << dist_unit_vec[2] << std::endl;
+    */
     tee << "  Dist " << dist_mag_closest << " x " << dist_closest[0] << " y " << dist_closest[1] << " z " << dist_closest[2]
         << "  Teleporting to other side of "
         << (close->is_electron ? "electron" : "proton")
@@ -433,7 +435,6 @@ void Particle::ConsiderLoggingToFile(int count) {
       vel_unit_vec [i]  = vel[i] / vel_mag;
       dist_unit_vec[i]  = dist_closest[i] / dist_mag_closest;
     }
-    dis_vel_dot_prod_old = dist_vel_dot_prod;
 
     if (is_electron) {
       // dot product between dist of closest and velocity.

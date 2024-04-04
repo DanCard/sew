@@ -23,8 +23,9 @@ Atom::Atom(int numParticles) :
               << "\t kShortDt " << kShortDt << "  kLongDt " << kLongDt << std::endl;
     std::cout << "\t\t\t\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
-    const int proton_initial_radius = kBohrRadiusProton * (num_particles * 2);
-    const int electron_initial_radius = proton_initial_radius * 2;
+    const SFloat nucleus_initial_radius = kBohrRadiusProton * (num_particles / 2);
+    const SFloat electron_initial_radius = nucleus_initial_radius * 2;
+    std::cout << "\t\t\t\t nucleus initial radius " << nucleus_initial_radius << "  electron initial radius " << electron_initial_radius << std::endl;
     int divider;  // Prefer bright colors, but with many particles becomes indistinguishable.
          if (num_particles <= 2)  divider = 1;
     else if (num_particles <= 4)  divider = 3;
@@ -51,7 +52,7 @@ Atom::Atom(int numParticles) :
         }
       } else {
         is_electron = false;
-        pars[i] = new Proton(i, this, logger, proton_initial_radius);
+        pars[i] = new Proton(i, this, logger, nucleus_initial_radius * 2);
         p = pars[i];
         p->color[0] =   0 + (std::rand() % 210);
         p->color[1] =   0 + (std::rand() % 240);
@@ -68,7 +69,7 @@ Atom::Atom(int numParticles) :
         // if (num_particles > 2) {
           // Set random locations
           p->pos[j] = ((float)std::rand() / ((float)RAND_MAX + 1.0f) - 0.5f)
-           * (is_electron ? proton_initial_radius : electron_initial_radius);
+           * (is_electron ? nucleus_initial_radius : electron_initial_radius);
         // }
         // Increase brightness
         int increase = p->color[j] / divider;
@@ -78,7 +79,6 @@ Atom::Atom(int numParticles) :
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " "           << int(p->color[2]) << std::endl;
       std::cout << "\t\t pos " << p->pos[0] << " " << p->pos[1] << " " << p->pos[2] << std::endl;
-      std::cout << "\t\t this " << this << "  p->a_ " << p->a_ << std::endl;
     }
     for (SFloat & p_energy_cycle_ : pot_energy_cycle) {
       p_energy_cycle_ = 0;

@@ -214,7 +214,7 @@ class Proton : public Particle {
 public:
   // amplitude = kQ * kBohrMagneton / kProtonMagneticMoment = guess / theory.
   // Could amplitude be kQ?
-  explicit Proton(int id, Atom *a, Logger *logger, const int max_allowed_dist) :
+  explicit Proton(int id, Atom *a, Logger *logger, SFloat max_allowed_dist) :
            Particle(id, false, a, kPMassMEv, kPMassKg, kQ, kQ,
                     max_allowed_dist, kMaxSpeedProton, logger) {}
 };

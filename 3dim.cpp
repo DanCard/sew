@@ -178,7 +178,6 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   }
   std::cout << "\t sphere pos: " << _spherePositions[0][0]
               << " electron pos: " << atom->pars[0]->pos[0]
-              << "  class atom address " << atom->pars[0]->a_
               << std::endl;
   {        // Rendering spheres / particles.
       _sphereShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}
