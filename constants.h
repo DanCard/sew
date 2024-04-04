@@ -29,7 +29,7 @@ const SFloat kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wi
 const SFloat kEMassKg = 9.1093837015e-31;   // kg
 const SFloat kPMassKg = 1.67262192369e-27;  // kg
 const SFloat kBohrRadius = 5.29177210903e-11;  // Meters
-const SFloat kBohrRadiusProton = kBohrRadius / 2;  // value = swag / trial and error
+const SFloat kBohrRadiusProton = kBohrRadius / 8;  // value = Something that works with this simulation.
 const SFloat kLithiumAtomSize = 152e-12;  // 152 picometers
 // The nuclear radius (r) can be estimated using the formula r = r0 * A^(1/3),
 // where r0 is approximately 1.2 femtometers (fm) and 

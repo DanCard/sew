@@ -27,14 +27,14 @@ Particle::Particle(int id, bool is_electron, Atom* a,
           logger(logger),
           tee_logger(is_electron ? "e" + std::to_string(id) + ".log"
                                  : "p" + std::to_string(id) + ".log"),
-                     tee(tee_logger.get_stream())
-  {
+                     tee(tee_logger.get_stream()) {
     log_count = is_electron ? 2 : 0;
     log_count = 1;
     std::cout << "\t" << (is_electron ? "electron" : "proton") << " " << id
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
     tee << "\t\t initial_charge " << initial_charge << std::endl;
+    num_allowed_escapes_for_energy_capping = (a_->num_particles / 2) + 2;  // Empirical formula.
   }
 
 void Particle::logToBuffer(const std::string &s) {
@@ -104,11 +104,8 @@ void Particle::ConsiderLoggingToFile(int count) {
   void Particle::HandleEscape() {
     logger->SetColorForConsole(color[0], color[1], color[2]);
     tee << "\t" << (is_electron ? "e" : "p") << id
-        << " escaped past radius of " << max_dist_allow
-        << "  Dist mag from origin : " << distance_mag_from_origin
-        << "  Current velocity " << std::sqrt(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2])
-      //<< "  x " << vel[0] << " y " << vel[1] << " z " << vel[2]
-      //<< "  total energy " << a_->total_energy
+        << " escaped.  Current velocity " << std::sqrt(vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2])
+        << "  total energy " << a_->total_energy
       ;
     if (v_when_teleported > 0) {
         tee << "  V when previously teleported: " << v_when_teleported;
@@ -126,9 +123,10 @@ void Particle::ConsiderLoggingToFile(int count) {
     // Zero out the biggest velocity or all?
     for (SFloat & v : vel) v = 0;
     log_count = 1;  // Force logging around this event.
-    if (a_->total_energy_cap == 0) {
-      a_->total_energy_cap = a_->total_energy * 1.5f;  // * 1.5 because protons continue gaining energy.
+    if (a_->total_energy < a_->total_energy_cap && num_allowed_escapes_for_energy_capping > 0) {
+      a_->total_energy_cap = a_->total_energy * 1.0f;
       tee << "  total energy cap set to " << a_->total_energy_cap;
+      num_allowed_escapes_for_energy_capping -= 1;
     }
     tee << std::endl;
   }
@@ -204,7 +202,7 @@ void Particle::ConsiderLoggingToFile(int count) {
                          const SFloat *dist_unit_vector) {
     // Save some CPU processing time when we are in slow mode, by ignoring the insignificant magnetic force.
     if (a_->dt <= kShortDt) return;
-    if (a_->short_dt == kShortDt && fast_fraction <= 0.1 && a_->count%32 != 0) return;
+    if (a_->short_dt == kShortDt && fast_fraction <= 0.1f && a_->count%32 != 0) return;
     // Constants for calculating magnetic force.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
@@ -356,16 +354,13 @@ void Particle::ConsiderLoggingToFile(int count) {
     if (dist_vel_dot_prod >= 0
      && orig_vel_dot_prod >= 0
      && dist_mag_closest > (kCloseToTrouble*16)) {
-      if (dis_vel_dot_prod_old < 0) {
-        flipped_dis_vel_dot_prod = true;  // If true then log
-      } else if (a_->total_energy_cap != 0
-              && a_->total_energy_cap < a_->total_energy) {
+      if (a_->total_energy_cap != 0 && a_->total_energy_cap < a_->total_energy) {
         energy_dissipated = true;
         for (SFloat & v : vel) {
           // Will cause total energy to drop.
           // Should be relative to size of dt.  Small dt less energy loss.
           // High dt higher energy loss.
-          percent_energy_dissipated = 1 - ((1 - 0.999) * fast_fraction);
+          percent_energy_dissipated = 1 - ((1 - 0.999f) * fast_fraction);
           v *= percent_energy_dissipated;  // Combat energy gain.  Dissipate energy when heading away.
         }
       }
@@ -439,7 +434,6 @@ void Particle::ConsiderLoggingToFile(int count) {
       dist_unit_vec[i]  = dist_closest[i] / dist_mag_closest;
     }
     dis_vel_dot_prod_old = dist_vel_dot_prod;
-    flipped_dis_vel_dot_prod = false;
 
     if (is_electron) {
       // dot product between dist of closest and velocity.

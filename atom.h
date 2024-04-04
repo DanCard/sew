@@ -44,7 +44,7 @@ public:
   SFloat total_kinetic_energy = 0;
   SFloat total_energy = 0;    // Total energy of all particles = potential energy + kinetic energy
   // Energy of all particles when we had an escape.  Above this energy we start dissipating energy.
-  SFloat total_energy_cap = 0;
+  SFloat total_energy_cap = 1;
   SFloat potential_energy_average;
 
   SFloat pot_energy_cycle[kEFrequencySubDivisions];

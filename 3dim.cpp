@@ -113,7 +113,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       const Vector2 dpiScaling = this->dpiScaling({});
       Configuration conf;
       conf.setTitle("Magnum Octree Example")
-          .setSize({1024+512+256, 2048}, dpiScaling)
+          .setSize({1024+512+256, 1024+512+256}, dpiScaling)
           .setWindowFlags(Configuration::WindowFlag::Resizable);
       Debug{} << "size:" << conf.size() << "dpiScaling:" << dpiScaling << "max:" << dpiScaling.max();
       GLConfiguration glConf;

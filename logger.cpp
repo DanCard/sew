@@ -147,7 +147,6 @@ namespace sew {
       w_to_log_id = (w_to_log_id + 1) % a_->num_particles;
       w->log_count--;
       w->logToBuffer(log_line_str);
-      w->energy_dissipated_prev = w->energy_dissipated;
       return;
     }
     // Didn't log to screen so consider logging to just file.

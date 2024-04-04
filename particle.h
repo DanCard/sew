@@ -99,11 +99,10 @@ public:
   // Determine if electron is coming or going relative to closest proton.
   // For proton indicates if coming or going relative to center.
   SFloat       dist_vel_dot_prod;
-  SFloat       dis_vel_dot_prod_old;
-  bool flipped_dis_vel_dot_prod = false;  // If true then log
   bool energy_dissipated = false;      // When leaving proton, dissipate energy.
-  bool energy_dissipated_prev = false;  // When different from energy_dissipated, then log.
-  SFloat percent_energy_dissipated = 0;
+  SFloat percent_energy_dissipated;
+  int num_allowed_escapes_for_energy_capping;
+
 
   // Infinite force when particles are superimposed on each other.
   // To combat limitations of simulation, teleport the electron to other side of proton.
@@ -175,20 +174,20 @@ public:
     // from 97% to 99% return 99.9% to 99.99%
     // from 99% to 100% return 99.99% to 99.999%
 
-    if (slow_fraction < 0.90) {
+    if (slow_fraction < 0.90f) {
       return slow_fraction;
     }
-    if (slow_fraction < 0.95) {
-      return 0.9 + (slow_fraction - 0.90) * (0.09 / 0.05);
+    if (slow_fraction < 0.95f) {
+      return 0.9f + (slow_fraction - 0.90f) * (0.09f / 0.05f);
     }
-    if (slow_fraction < 0.97) {
-      return 0.99 + (slow_fraction - 0.95) * (0.009 / 0.02);
+    if (slow_fraction < 0.97f) {
+      return 0.99f + (slow_fraction - 0.95f) * (0.009f / 0.02f);
     }
-    if (slow_fraction < 0.99) {
-      return 0.999 + (slow_fraction - 0.97) * (0.0009 / 0.02);
+    if (slow_fraction < 0.99f) {
+      return 0.999f + (slow_fraction - 0.97f) * (0.0009f / 0.02f);
     }
-    if (slow_fraction < 0.999) {
-      return 0.9999 + (slow_fraction - 0.99) * (0.00009 / 0.009);
+    if (slow_fraction < 0.999f) {
+      return 0.9999f + (slow_fraction - 0.99f) * (0.00009f / 0.009f);
     }
     return 1;
   }
@@ -206,18 +205,18 @@ public:
 
 class Electron : public Particle {
 public:
-  explicit Electron(int id, Atom* a, Logger *logger) : Particle(id, true, a,
-                    kEMassMEv, kEMassKg, -kQ, -kQ,
-                    kBohrRadius * 2, kMaxSpeedElectron, logger) {}
+  explicit Electron(int id, Atom *a, Logger *logger, SFloat max_allowed_dist) :
+           Particle(id, true, a, kEMassMEv, kEMassKg, -kQ, -kQ,
+                    max_allowed_dist, kMaxSpeedElectron, logger) {}
 };
 
 class Proton : public Particle {
 public:
   // amplitude = kQ * kBohrMagneton / kProtonMagneticMoment = guess / theory.
   // Could amplitude be kQ?
-  explicit Proton(int id, Atom* a, Logger *logger) : Particle(id, false, a,
-                  kPMassMEv, kPMassKg, kQ, kQ,
-                  kBohrRadiusProton, kMaxSpeedProton, logger) {}
+  explicit Proton(int id, Atom *a, Logger *logger, const int max_allowed_dist) :
+           Particle(id, false, a, kPMassMEv, kPMassKg, kQ, kQ,
+                    max_allowed_dist, kMaxSpeedProton, logger) {}
 };
 
 } // namespace
