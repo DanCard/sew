@@ -12,7 +12,9 @@
 
 namespace sew {
 
-  Logger::Logger(Atom* a) : a_(a) {}
+  Logger::Logger(Atom* a) :
+    a_(a), start_time_(std::chrono::_V2::system_clock::now()) {
+  }
 
   void Logger::DtLoggingToggle() {
     dt_logging = !dt_logging;
@@ -111,6 +113,9 @@ namespace sew {
     if (iterations_logging) {
       log_line << " i" << std::setw(5) << a_->iter;
     }
+    auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::_V2::system_clock::now() - start_time_);
+    log_line << " t " << std::setw(6) << elapsed_time.count();
     /*
     for (int i=0; i<num_particles_; ++i) {
       if (i == id || i == par_closest_id) continue;

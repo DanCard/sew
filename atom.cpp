@@ -1,26 +1,25 @@
 #include "atom.h"
 
 #include <atomic>
-#include <cassert>
 #include <cstdlib> // For rand()
 #include <iostream>
-#include <tbb/parallel_for.h>
-// #define USE_INTEL_THREADING
 #include <thread>
 #include <vector>
 
 #include "logger.h"
 #include "particle.h"
+#include "thread_pool.h"
 
 
 namespace sew {
 
-Atom::Atom(int numParticles) : num_particles(numParticles) {
+Atom::Atom(int numParticles) :
+         num_particles(numParticles), long_dt(kLongDt), short_dt(kShortDtFast) {
     if (num_particles == 0) return;
     logger = new sew::Logger(this);
-    const int num_threads = std::thread::hardware_concurrency();
-    std::cout << "\t\t\t num threads " << num_threads << std::endl;
-    std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
+    std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron
+      << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
+      << "  kEFrequencySubDivisions " << kEFrequencySubDivisions
               << "\t kShortDt " << kShortDt << "  kLongDt " << kLongDt << std::endl;
     std::cout << "\t\t\t\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
@@ -45,7 +44,7 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
         p->color[2] = std::rand() % 245;
         if (i == 0) {
           p->vel[1] = -1e4;
-          p->pos[0] = -p->max_dist_allow * 0.95;
+          p->pos[0] = -p->max_dist_allow * 0.95f;
           p->color[0] = 255;
           p->color[1] = 120;
           p->color[2] = 120;
@@ -67,7 +66,7 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
       for (int j = 0; j < 3; ++j) {
         if (num_particles > 2) {
           // Set random locations
-          p->pos[j] = (std::rand() / (RAND_MAX + 1.0) - 0.5) * kBohrRadiusProton;
+          p->pos[j] = ((float)std::rand() / ((float)RAND_MAX + 1.0f) - 0.5f) * kBohrRadiusProton;
         }
         // Increase brightness
         int increase = p->color[j] / divider;
@@ -82,19 +81,23 @@ Atom::Atom(int numParticles) : num_particles(numParticles) {
     for (SFloat & p_energy_cycle_ : pot_energy_cycle) {
       p_energy_cycle_ = 0;
     }
-  }
+    const int num_threads = std::min((int)std::thread::hardware_concurrency(), num_particles*2);
+    std::cout << "\t\t\t num threads " << num_threads << std::endl;
+    thread_pool = new ThreadPool(num_threads);
+}
 
   // Potential energy changes because of sinusoidal charge frequency.
 void Atom::CalcAveragePotentialEnergy() {
-    sum_p_energy += pot_energy_cycle[pot_energy_cycle_index++];
-    pot_energy_cycle_index = pot_energy_cycle_index % kPFrequencySubDivisions;
-    // Subtract the potential energy that is going to roll off our average.
+    sum_p_energy += total_potential_energy;
+    pot_energy_cycle[pot_energy_cycle_index] = total_potential_energy;
+    pot_energy_cycle_index = (pot_energy_cycle_index + 1) % kEFrequencySubDivisions;
+    // Subtract the potential energy that is rolling off our average.
     sum_p_energy -= pot_energy_cycle[pot_energy_cycle_index];
     // -1 because of the value subtracted above.
-    potential_energy_average = sum_p_energy / (kPFrequencySubDivisions - 1);
+    potential_energy_average = sum_p_energy / (kEFrequencySubDivisions - 1);
   }
 
-void Atom::CalcEnergy() {
+void Atom::CalcEnergyOfAtom() {
     // Calculate potential energy.
     total_potential_energy = 0;
     total_kinetic_energy = 0;
@@ -104,7 +107,7 @@ void Atom::CalcEnergy() {
     // Set the potential energy for each pair of particles.
     for (int i = 0; i < num_particles; ++i) {
       Particle *w1 = pars[i];   // Wave 1
-      total_kinetic_energy += 0.5 * w1->mass_kg * w1->vel_mag2;
+      total_kinetic_energy += 0.5f * w1->mass_kg * w1->vel_mag2;
       for (int j = i + 1; j < num_particles; ++j) {
         Particle *w2 = pars[j];   // Wave 2
         if(w1->dist_mag_all[j] == 0) {
@@ -120,8 +123,6 @@ void Atom::CalcEnergy() {
       }
     }
 
-    pot_energy_cycle[pot_energy_cycle_index] = total_potential_energy;
-    pot_energy_cycle_index = (pot_energy_cycle_index + 1) % kPFrequencySubDivisions;
     // Potential energy changes because of sinusoidal charge frequency.
     // Alternatively could just use average charge.
     CalcAveragePotentialEnergy();
@@ -136,6 +137,13 @@ void Atom::AllForcesOnParticle(Particle * part_ptr) {
     }
   }
 
+void Atom::CalcForcesAndApply(Particle * part_ptr) {
+  Atom::AllForcesOnParticle(part_ptr);
+  part_ptr->ApplyForces();
+}
+
+// Twice as slow to use a thread pool.  Why?
+// #define use_thread_pool
 
   // Called once for every screen draw.
 void Atom::MoveParticles() {
@@ -155,28 +163,31 @@ void Atom::MoveParticles() {
         pars[i]->InitVarsToCalcForces();
       }
 
-#ifdef USE_INTEL_THREADING
-      // Use Intel Threading Library.
-      //#pragma omp parallel for
-#else
-      for (int j = 0; j < num_particles; ++j) {
-        Particle * part_ptr = pars[j];
-        AllForcesOnParticle(part_ptr);
-      }
+#ifdef use_thread_pool
+      std::future<void> future_results[kMaxParticles];
 #endif
       for (int j = 0; j < num_particles; ++j) {
         Particle * part_ptr = pars[j];
-        part_ptr->ApplyForcesToParticle();
-        pos_change_per_particle[j] += std::abs(part_ptr->pos_change_magnitude);
+#ifdef use_thread_pool
+        future_results[j] = thread_pool->AddTask(&Atom::CalcForcesAndApply, this, part_ptr);
+#else
+        CalcForcesAndApply(part_ptr);
+#endif
       }
 
-      // Find the shortest dt and set the new dt to that.
       dt = pars[0]->new_dt;
-      for (int j = 1; j < num_particles; ++j) {
-        dt = std::min(pars[j]->new_dt, dt);
+      for (int j = 0; j < num_particles; ++j) {
+#ifdef use_thread_pool
+        future_results[j].get();      // Wait for task in thread pool to finish.
+#endif
+        Particle * part_ptr = pars[j];
+        pos_change_per_particle[j] += std::abs(part_ptr->pos_change_magnitude);
+        // Find the shortest dt and set the new dt to that.
+        dt = std::min(part_ptr->new_dt, dt);
       }
 
-      CalcEnergy();
+      CalcEnergyOfAtom();
+
       for (int i = 0; i < num_particles; ++i) {
         logger->LogStuff(pars[i]);
       }
@@ -224,6 +235,10 @@ void Atom::MoveParticles() {
 
   void Atom::VelocityLoggingToggle() {
     logger->VelocityLoggingToggle();
+  }
+
+  void Atom::FastModeToggle() {
+    short_dt = (kShortDt == short_dt) ? kShortDtFast : kShortDt;
   }
 
 

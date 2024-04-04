@@ -30,6 +30,7 @@ add_executable(test-particles
     particle.h
     particle.cpp
     test_particles.cpp
+    thread_pool.h
     )
 
 add_executable(3dim WIN32
@@ -42,7 +43,8 @@ add_executable(3dim WIN32
     particle.h
     particle.cpp
     arcball/ArcBall.cpp
-    )
+    thread_pool.h
+)
 
 target_link_libraries(3dim PRIVATE
     Corrade::Main

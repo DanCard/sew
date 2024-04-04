@@ -23,13 +23,13 @@ class Particle;
 class Atom;
 
 class Logger {
-public:
+  public:
     sew::Atom *a_;
 
     explicit Logger(Atom *a);
 
     bool dt_logging = false;
-    bool energy_logging = false;
+    bool energy_logging = true;
     bool fast_logging = false;
     bool frame_draw_statistics_logging = false;
     bool iterations_logging = true;
@@ -38,19 +38,12 @@ public:
     bool velocity_logging = false;
 
     void DtLoggingToggle();
-
     void EnergyLoggingToggle();
-
     void FastLoggingToggle();
-
     void FrameDrawStatisticsLoggingToggle();
-
     void IterationsLoggingToggle();
-
     void PositionLoggingToggle();
-
     void PercentEnergyDissipatedLoggingToggle();
-
     void VelocityLoggingToggle();
 
     static void SetColorForConsole(unsigned char r, unsigned char g, unsigned char b) {
@@ -89,6 +82,10 @@ public:
 
     // Log a particle and misc info.
     void LogStuff(Particle *w);
+
+  private:
+    const std::chrono::_V2::system_clock::time_point start_time_;
+  
 };
 
 } // namespace

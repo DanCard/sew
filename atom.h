@@ -16,6 +16,7 @@
 #include "constants.h"
 #include "logger.h"
 #include "particle.h"
+#include "thread_pool.h"
 
 namespace sew {
 
@@ -46,11 +47,13 @@ public:
   SFloat total_energy_cap = 0;
   SFloat potential_energy_average;
 
-  SFloat pot_energy_cycle[kPFrequencySubDivisions];
+  SFloat pot_energy_cycle[kEFrequencySubDivisions];
   int    pot_energy_cycle_index = 0;
   SFloat sum_p_energy = 0;        // Only used in below method.
   Logger* logger;
   int iter = 0;   // Number of iterations to get significant movement.
+  SFloat long_dt;
+  SFloat short_dt;
 
   explicit Atom(int numParticles);
 
@@ -63,13 +66,15 @@ public:
   void IterationsLoggingToggle();
   void PositionLoggingToggle();
   void VelocityLoggingToggle();
-
-    void PercentEnergyDissipatedLoggingToggle();
+  void PercentEnergyDissipatedLoggingToggle();
+  void FastModeToggle();
 
 private:
   void CalcAveragePotentialEnergy();
-  void CalcEnergy();
+  void CalcEnergyOfAtom();
   void AllForcesOnParticle(Particle * part_ptr);
+  void CalcForcesAndApply(Particle *part_ptr);
+  ThreadPool* thread_pool;
 };
 
 } // namespace

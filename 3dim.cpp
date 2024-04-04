@@ -113,7 +113,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       const Vector2 dpiScaling = this->dpiScaling({});
       Configuration conf;
       conf.setTitle("Magnum Octree Example")
-          .setSize({1024+512+256, 1024+128}, dpiScaling)
+          .setSize({1024+512+256, 2048}, dpiScaling)
           .setWindowFlags(Configuration::WindowFlag::Resizable);
       Debug{} << "size:" << conf.size() << "dpiScaling:" << dpiScaling << "max:" << dpiScaling.max();
       GLConfiguration glConf;
@@ -171,7 +171,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
-    float sphere_radius = (p->is_electron || numSpheres <= 4 ? 1 : 1.5) * _sphereRadius;
+    float sphere_radius = (p->is_electron ? 1 : 1.5) * _sphereRadius;
     _sphereInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[i]) *
                                                   Matrix4::scaling(Vector3{sphere_radius}) * 3;
     _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();
@@ -316,7 +316,7 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
     } else if(event.key() == KeyEvent::Key::E) {
         atom->EnergyLoggingToggle();
     } else if(event.key() == KeyEvent::Key::F) {
-        atom->FastLoggingToggle();
+        atom->FastModeToggle();
     } else if(event.key() == KeyEvent::Key::I) {
         atom->IterationsLoggingToggle();
     } else if(event.key() == KeyEvent::Key::O) {
@@ -330,6 +330,8 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
         _arcballCamera->reset();
     } else if(event.key() == KeyEvent::Key::V) {
         atom->VelocityLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::X) {
+        atom->FastLoggingToggle();
     } else if(event.key() == KeyEvent::Key::Y) {
       atom->PercentEnergyDissipatedLoggingToggle();
     } else if(event.key() == KeyEvent::Key::Z) {

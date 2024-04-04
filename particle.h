@@ -200,7 +200,7 @@ public:
   // If the simulation won't work because of large errors because of huge forces.
   void TeleportIfTooCloseToProton();
 
-  void ApplyForcesToParticle();
+  void ApplyForces();
 };
 
 

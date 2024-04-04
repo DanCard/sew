@@ -127,7 +127,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     for (SFloat & v : vel) v = 0;
     log_count = 1;  // Force logging around this event.
     if (a_->total_energy_cap == 0) {
-      a_->total_energy_cap = a_->total_energy * 1.2f;  // * 1.2 because protons continue gaining energy.
+      a_->total_energy_cap = a_->total_energy * 1.5f;  // * 1.5 because protons continue gaining energy.
       tee << "  total energy cap set to " << a_->total_energy_cap;
     }
     tee << std::endl;
@@ -147,16 +147,13 @@ void Particle::ConsiderLoggingToFile(int count) {
 
   // Get the charge that is based on freq and thus time.
   SFloat Particle::ChargeSinusoidal() const {
-    // if dt > 0.25 / frequency, then charge is constant.
-    // Can't simulate sinusoidal charge when dt is large.
+    // if dt > 0.25 / frequency, then make charge constant, because
+    // can't simulate sinusoidal charge when dt is much bigger than wave period.
+    if (a_->dt > (0.25f/frequency)) {
+      return avg_q;
+    }
     /*
-    if (dt > (0.25/frequency)) {
-      return avg_q;
-    }
     if (!is_electron) {
-      return avg_q;
-    }
-    if (is_electron) {
       return avg_q;
     }
     */
@@ -207,7 +204,7 @@ void Particle::ConsiderLoggingToFile(int count) {
                          const SFloat *dist_unit_vector) {
     // Save some CPU processing time when we are in slow mode, by ignoring the insignificant magnetic force.
     if (a_->dt <= kShortDt) return;
-    if (fast_fraction <= 0.1 && a_->count%32 != 0) return;
+    if (a_->short_dt == kShortDt && fast_fraction <= 0.1 && a_->count%32 != 0) return;
     // Constants for calculating magnetic force.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
@@ -354,7 +351,7 @@ void Particle::ConsiderLoggingToFile(int count) {
       }
     }
     *fast_fraction_ptr = fast_fraction;
-    new_dt = kLongDt + ((kShortDt - kLongDt) * inverse_exponential);
+    new_dt = a_->long_dt + ((a_->short_dt - kLongDt) * inverse_exponential);
     // Dissipate energy when heading away.
     if (dist_vel_dot_prod >= 0
      && orig_vel_dot_prod >= 0
@@ -368,7 +365,7 @@ void Particle::ConsiderLoggingToFile(int count) {
           // Will cause total energy to drop.
           // Should be relative to size of dt.  Small dt less energy loss.
           // High dt higher energy loss.
-          percent_energy_dissipated = 1 - ((1 - 0.9999) * fast_fraction);
+          percent_energy_dissipated = 1 - ((1 - 0.999) * fast_fraction);
           v *= percent_energy_dissipated;  // Combat energy gain.  Dissipate energy when heading away.
         }
       }
@@ -425,7 +422,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     close->log_count = 1;          // Force extra logging for other particle.
   }
 
-  void Particle::ApplyForcesToParticle() {
+  void Particle::ApplyForces() {
     force_magnitude = std::sqrt(forces[0]*forces[0] + forces[1]*forces[1] + forces[2]*forces[2]);
     for (int i = 0; i < 3; ++i) {
       acceleration[i] = forces[i] / this->mass_kg;

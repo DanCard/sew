@@ -42,12 +42,14 @@ const SFloat kEFrequency = kEMassMEv / kHEv;
 const SFloat kPFrequency = kPMassMEv / kHEv;
 const int    kMaxParticles = 16;
 // For increased speed avoid lowering.  Instead increase threading.
-const int    kPFrequencySubDivisions = 64;
+const int    kPFrequencySubDivisions =  32;
+const int    kEFrequencySubDivisions = 128;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
-const SFloat kShortDt = 1 / ( kPFrequency * kPFrequencySubDivisions );
+const SFloat kShortDt     = 1 / ( kPFrequency * kPFrequencySubDivisions );
+const SFloat kShortDtFast = 1 / ( kEFrequency * kEFrequencySubDivisions );
 // Use a long dt to make the simulation faster.
-const SFloat kLongDt  = 1 / ( kEFrequency * kPFrequencySubDivisions );  // Seconds
+const SFloat kLongDt  = 1 / ( kEFrequency * kEFrequencySubDivisions );  // Seconds
 // We change the simulation style when particle gets near the speed of light.
 // Instead of using dt, we just simulate the trajectory of the particle.
 // Needed because simulation creates huge errors when there are huge forces.
