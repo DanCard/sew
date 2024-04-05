@@ -68,6 +68,9 @@ public:
   void VelocityLoggingToggle();
   void PercentEnergyDissipatedLoggingToggle();
   void FastModeToggle();
+  void SlowMode();
+  void TimeLoggingToggle();
+  void WallClockToggle();
 
 private:
   void CalcAveragePotentialEnergy();

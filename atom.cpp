@@ -1,6 +1,5 @@
 #include "atom.h"
 
-#include <atomic>
 #include <cstdlib> // For rand()
 #include <iostream>
 #include <thread>
@@ -207,41 +206,18 @@ void Atom::MoveParticles() {
     }
   }
 
-  void Atom::DtLoggingToggle() {
-    logger->DtLoggingToggle();
-  }
-
-  void Atom::EnergyLoggingToggle() {
-    logger->EnergyLoggingToggle();
-  }
-
-  void Atom::FastLoggingToggle() {
-    logger->FastLoggingToggle();
-  }
-
-  void Atom::IterationsLoggingToggle() {
-    logger->IterationsLoggingToggle();
-  }
-
-  void Atom::FrameDrawStatisticsLoggingToggle() {
-    logger->FrameDrawStatisticsLoggingToggle();
-  }
-
-  void Atom::PositionLoggingToggle() {
-    logger->PositionLoggingToggle();
-  }
-
-  void Atom::PercentEnergyDissipatedLoggingToggle() {
-    logger->PercentEnergyDissipatedLoggingToggle();
-  }
-
-  void Atom::VelocityLoggingToggle() {
-    logger->VelocityLoggingToggle();
-  }
-
-  void Atom::FastModeToggle() {
-    short_dt = (kShortDt == short_dt) ? kShortDtFast : kShortDt;
-  }
+  void Atom::DtLoggingToggle    () {logger->DtLoggingToggle();}
+  void Atom::EnergyLoggingToggle() {logger->EnergyLoggingToggle();  }
+  void Atom::FastLoggingToggle  () {logger->FastLoggingToggle();  }
+  void Atom::IterationsLoggingToggle() {logger->IterationsLoggingToggle();  }
+  void Atom::FrameDrawStatisticsLoggingToggle() { logger->FrameDrawStatisticsLoggingToggle();  }
+  void Atom::PositionLoggingToggle() {logger->PositionLoggingToggle();  }
+  void Atom::PercentEnergyDissipatedLoggingToggle() {logger->PercentEnergyDissipatedLoggingToggle();  }
+  void Atom::VelocityLoggingToggle() {logger->VelocityLoggingToggle();}
+  void Atom::FastModeToggle     () {short_dt = (kShortDt == short_dt) ? kShortDtFast : kShortDt;  }
+  void Atom::SlowMode           () {short_dt = kShortDt;  }
+  void Atom::TimeLoggingToggle  () {logger->TimeLoggingToggle();  }
+  void Atom::WallClockToggle    () {logger->WallClockLoggingToggle();  }
 
 
 } // namespace

@@ -2,7 +2,6 @@
 
 #include <cmath>   // For M_PI constant and other match functions such as round.
 #include <chrono>  // For logging every 500 ms
-#include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -48,8 +47,16 @@ namespace sew {
     velocity_logging = !velocity_logging;
   }
 
+  void Logger::TimeLoggingToggle() {
+    time_logging = !time_logging;
+  }
+
+  void Logger::WallClockLoggingToggle() {
+    wall_clock_time_logging = !wall_clock_time_logging;
+  }
+
   // A bit of a mess because we have particle data and particles(system) data that we are logging.
-  std::string Logger::FormatLogLine(Particle* w, bool to_file) const {
+  std::string Logger::FormatLogLine(const Particle* w, bool to_file) const {
     Particle* par_closest = w->par_closest;
     SFloat charge_of_closest = par_closest->freq_charge;
 
@@ -90,9 +97,9 @@ namespace sew {
    // << " min pos change " << min_pos_change_desired
    // << round(fast_fraction * 10) * 10 << '%'
                   << std::setw( 6) << std::setprecision(1) << std::fixed 
-      << " chrg"  << std::setw( 4) << int(std::round((w->freq_charge/w->avg_q)*100.0f)) << '%'
+      << " chrg"  << std::setw( 4) << static_cast<int>(std::round((w->freq_charge / w->avg_q) * 100.0f)) << '%'
       << " oth"   << std::setw( 4)
-      << int(std::round((charge_of_closest / par_closest->q_amplitude) * 100.0f)) << '%';
+      << static_cast<int>(std::round((charge_of_closest / par_closest->q_amplitude) * 100.0f)) << '%';
    // << " inv"   << std::setw(12) << inverse_exponential
     if (energy_logging || to_file) {
       log_line << std::scientific << std::setprecision(2)
@@ -113,9 +120,14 @@ namespace sew {
     if (iterations_logging) {
       log_line << " i" << std::setw(5) << a_->iter;
     }
-    auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::_V2::system_clock::now() - start_time_);
-    log_line << " t " << std::setw(6) << elapsed_time.count();
+    if (wall_clock_time_logging || to_file) {
+      auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::_V2::system_clock::now() - start_time_);
+      log_line << " w " << std::setw(6) << elapsed_time.count();
+    }
+    if (time_logging) {
+      log_line << " t " << std::scientific << std::setprecision(3) << std::setw(9) << a_->time_;
+    }
     /*
     for (int i=0; i<num_particles_; ++i) {
       if (i == id || i == par_closest_id) continue;

@@ -327,8 +327,14 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
         else _profiler.enable();
     } else if(event.key() == KeyEvent::Key::R) {
         _arcballCamera->reset();
+    } else if(event.key() == KeyEvent::Key::S) {
+        atom->SlowMode();
+    } else if(event.key() == KeyEvent::Key::T) {
+        atom->TimeLoggingToggle();
     } else if(event.key() == KeyEvent::Key::V) {
         atom->VelocityLoggingToggle();
+    } else if(event.key() == KeyEvent::Key::W) {
+        atom->WallClockToggle();
     } else if(event.key() == KeyEvent::Key::X) {
         atom->FastLoggingToggle();
     } else if(event.key() == KeyEvent::Key::Y) {

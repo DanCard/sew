@@ -35,6 +35,8 @@ class Logger {
     bool iterations_logging = true;
     bool position_logging = false;
     bool percent_energy_dissipated_logging = true;
+    bool time_logging = true;
+    bool wall_clock_time_logging = true;
     bool velocity_logging = false;
 
     void DtLoggingToggle();
@@ -45,6 +47,8 @@ class Logger {
     void PositionLoggingToggle();
     void PercentEnergyDissipatedLoggingToggle();
     void VelocityLoggingToggle();
+    void TimeLoggingToggle();
+    void WallClockLoggingToggle();
 
     static void SetColorForConsole(unsigned char r, unsigned char g, unsigned char b) {
       printf("\x1b[38;2;%d;%d;%dm", r, g, b);
@@ -58,7 +62,7 @@ class Logger {
       return std::abs(d3[0] / d3[i]) < 10;
     }
 
-    static std::string Log3dArray(SFloat *d3, const std::string &name, int width = 6) {
+    static std::string Log3dArray(const SFloat *d3, const std::string &name, int width = 6) {
       std::ostringstream log_line;
       // Set precision based on width.  If width is 6, then precision is 0.
       // If width is 8, then precision is 1.  Cause 1 space for the decimal point.
@@ -76,7 +80,7 @@ class Logger {
     }
 
     // A bit of a mess because we have particle data and particles(system) data that we are logging.
-    std::string FormatLogLine(Particle *w, bool to_file) const;
+    std::string FormatLogLine(const Particle *w, bool to_file) const;
 
     int w_to_log_id = 0;  // Rotate through particles to log to screen, when we don't
 
