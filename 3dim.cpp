@@ -96,23 +96,20 @@ using namespace Math::Literals;
 
 ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments, NoCreate} {
   Utility::Arguments args;
-  args.addOption('s', "spheres", "2")
+  args.addOption('s', "spheres", "10")
           .setHelp("spheres", "number of spheres to simulate", "N")
       .addOption('r', "sphere-radius", "0.025")
           .setHelp("sphere-radius", "sphere radius", "R")
-      .addOption('v', "sphere-velocity", "0.05")
-          .setHelp("sphere-velocity", "sphere velocity", "V")
       .addSkippedPrefix("magnum")
       .parse(arguments.argc, arguments.argv);
 
   _sphereRadius = args.value<Float>("sphere-radius");
-  _sphereVelocity = args.value<Float>("sphere-velocity");
   sew::Atom * atom_ptr;
   // Setup window and parameters
   {
       const Vector2 dpiScaling = this->dpiScaling({});
       Configuration conf;
-      conf.setTitle("Magnum Octree Example")
+      conf.setTitle("Subatomic particles as Standing Electromagnetic Waves (SEW)")
           .setSize({1024+512+256, 1024+512+256}, dpiScaling)
           .setWindowFlags(Configuration::WindowFlag::Resizable);
       Debug{} << "size:" << conf.size() << "dpiScaling:" << dpiScaling << "max:" << dpiScaling.max();
@@ -188,8 +185,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       _sphereMesh.addVertexBufferInstanced(_sphereInstanceBuffer, 1, 0,
           Shaders::PhongGL::TransformationMatrix{},
           Shaders::PhongGL::NormalMatrix{},
-  //      Shaders::PhongGL::Color3{});      // Should that be Color4?
-          Shaders::PhongGL::Color4{});      // Should that be Color4?
+          Shaders::PhongGL::Color4{});
       _sphereMesh.setInstanceCount(_sphereInstanceData.size());
   }
   assert(atom_ptr == atom->pars[0]->a_);
@@ -200,30 +196,6 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
 
 std::mutex mutually_exclusive_lock;
 std::condition_variable condition_var;
-
-/*
-void ThreeDim::MoveParticlesThread() {
-  bool just_waited = false;
-  while (move_particles_thread_run) {
-    while (atom->screen_draw_event_occurred && animation_running) {
-      atom->screen_draw_event_occurred = false;
-      if (!just_waited)                       // Only used for logging.
-        atom->num_drawing_event_already += 1;
-      just_waited = false;                    // Only used for logging.
-
-      atom->MoveParticlesThread();
-    }
-    atom->num_wait_for_drawing_event += 1;     // Only used for logging.
-    just_waited = true;                       // Only used for logging.
-    {
-      // Grab a lock and wait for the next screen draw event.
-      std::unique_lock<std::mutex> lk(mutually_exclusive_lock);
-      condition_var.wait(lk, [this]{return atom->screen_draw_event_occurred;});
-    }
-  }
-  // std::cout << "\t MoveParticlesThread() thread terminating as requested." << std::endl;
-}
-*/
 
 
 // Below runs as a separate thread.  Runs at most once for each frame draw.
@@ -287,67 +259,66 @@ void ThreeDim::drawEvent() {
 }
 
 void ThreeDim::drawSpheres() {
-    // Loop through all the spheres and update their transformation matrix
-    for(std::size_t i = 0; i != _spherePositions.size(); ++i)
-        _sphereInstanceData[i].transformationMatrix.translation() =
-            _spherePositions[i];
+  // Loop through all the spheres and update their transformation matrix
+  for(std::size_t i = 0; i != _spherePositions.size(); ++i)
+    _sphereInstanceData[i].transformationMatrix.translation() = _spherePositions[i];
 
-    _sphereInstanceBuffer.setData(_sphereInstanceData, GL::BufferUsage::DynamicDraw);
-    _sphereShader
-        .setProjectionMatrix(_projectionMatrix)
-        .setTransformationMatrix(_arcballCamera->viewMatrix())
-        .setNormalMatrix(_arcballCamera->viewMatrix().normalMatrix())
-        .draw(_sphereMesh);
+  _sphereInstanceBuffer.setData(_sphereInstanceData, GL::BufferUsage::DynamicDraw);
+  _sphereShader
+    .setProjectionMatrix(_projectionMatrix)
+    .setTransformationMatrix(_arcballCamera->viewMatrix())
+    .setNormalMatrix(_arcballCamera->viewMatrix().normalMatrix())
+    .draw(_sphereMesh);
 }
 
 // Handle window resize.
 void ThreeDim::viewportEvent(ViewportEvent& event) {
-    GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
-    _arcballCamera->reshape(event.windowSize());
+  GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
+  _arcballCamera->reshape(event.windowSize());
 
-    _projectionMatrix = Matrix4::perspectiveProjection(_arcballCamera->fov(),
-        Vector2{event.framebufferSize()}.aspectRatio(), 0.01f, 100.0f);
+  _projectionMatrix = Matrix4::perspectiveProjection(_arcballCamera->fov(),
+      Vector2{event.framebufferSize()}.aspectRatio(), 0.01f, 100.0f);
 }
 
 void ThreeDim::keyPressEvent(KeyEvent& event) {
-    if(event.key() == KeyEvent::Key::D) {
-        atom->DtLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::E) {
-        atom->EnergyLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::F) {
-        atom->FastModeToggle();
-    } else if(event.key() == KeyEvent::Key::I) {
-        atom->IterationsLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::O) {
-        if(_profiler.isEnabled()) _profiler.enable();
-    } else if(event.key() == KeyEvent::Key::P) {
-        atom->PositionLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::Q) {
-        if(_profiler.isEnabled()) _profiler.disable();
-        else _profiler.enable();
-    } else if(event.key() == KeyEvent::Key::R) {
-        _arcballCamera->reset();
-    } else if(event.key() == KeyEvent::Key::S) {
-        atom->SlowMode();
-    } else if(event.key() == KeyEvent::Key::T) {
-        atom->TimeLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::V) {
-        atom->VelocityLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::W) {
-        atom->WallClockToggle();
-    } else if(event.key() == KeyEvent::Key::X) {
-        atom->FastLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::Y) {
-      atom->PercentEnergyDissipatedLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::Z) {
-        atom->FrameDrawStatisticsLoggingToggle();
-    } else if(event.key() == KeyEvent::Key::Space) {
-        animation_running ^= true;
+  if(event.key() == KeyEvent::Key::D) {
+      atom->DtLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::E) {
+      atom->EnergyLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::F) {
+      atom->FastModeToggle();
+  } else if(event.key() == KeyEvent::Key::I) {
+      atom->IterationsLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::O) {
+      if(_profiler.isEnabled()) _profiler.enable();
+  } else if(event.key() == KeyEvent::Key::P) {
+      atom->PositionLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::Q) {
+      if(_profiler.isEnabled()) _profiler.disable();
+      else _profiler.enable();
+  } else if(event.key() == KeyEvent::Key::R) {
+      _arcballCamera->reset();
+  } else if(event.key() == KeyEvent::Key::S) {
+      atom->SlowMode();
+  } else if(event.key() == KeyEvent::Key::T) {
+      atom->TimeLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::V) {
+      atom->VelocityLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::W) {
+      atom->WallClockToggle();
+  } else if(event.key() == KeyEvent::Key::X) {
+      atom->FastLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::Y) {
+    atom->PercentEnergyDissipatedLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::Z) {
+      atom->FrameDrawStatisticsLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::Space) {
+      animation_running ^= true;
 
-    } else return;
+  } else return;
 
-    event.setAccepted();
-    redraw();
+  event.setAccepted();
+  redraw();
 }
 
 
