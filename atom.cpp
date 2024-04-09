@@ -23,7 +23,7 @@ Atom::Atom(int numParticles) :
     std::cout << "\t\t\t\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
     const SFloat nucleus_initial_radius = kBohrRadiusProton * (num_particles / 2);
-    const SFloat electron_initial_radius = nucleus_initial_radius * 2;
+    const SFloat electron_initial_radius = nucleus_initial_radius * 4;
     std::cout << "\t\t\t\t nucleus initial radius " << nucleus_initial_radius << "  electron initial radius " << electron_initial_radius << std::endl;
     int divider;  // Prefer bright colors, but with many particles becomes indistinguishable.
          if (num_particles <= 2)  divider = 1;
@@ -43,7 +43,7 @@ Atom::Atom(int numParticles) :
         p->color[1] = std::rand() % 256;
         p->color[2] = std::rand() % 245;
         if (i == 0) {
-          p->vel[1] = -1e4;
+          // p->vel[1] = -1e4;
           // p->pos[0] = -p->max_dist_allow * 0.95f;
           p->color[0] = 255;
           p->color[1] = 120;
@@ -67,7 +67,7 @@ Atom::Atom(int numParticles) :
       for (int j = 0; j < 3; ++j) {
         // if (num_particles > 2) {
           // Set random locations
-          p->pos[j] = ((float)std::rand() / ((float)RAND_MAX + 1.0f) - 0.5f)
+          p->pos[j] = (float)(std::rand() / (RAND_MAX + 1.0)) - 0.5f
            * (is_electron ? nucleus_initial_radius : electron_initial_radius);
         // }
         // Increase brightness

@@ -11,6 +11,7 @@
 #include <Magnum/MeshTools/Compile.h>
 #include <Magnum/Platform/Sdl2Application.h>
 #include <Magnum/Primitives/Icosphere.h>
+#include <Magnum/Shaders/FlatGL.h>
 #include <Magnum/Shaders/PhongGL.h>
 #include <Magnum/Trade/MeshData.h>
 #include <mutex>
@@ -65,7 +66,7 @@ protected:
   void drawSpheres();
 
   Containers::Optional<ArcBall> _arcballCamera;
-  Matrix4 _projectionMatrix;
+  Matrix4 _projectionMatrix;  // Something related to the camera
 
   /* Points data as spheres with size */
   Containers::Array<Vector3> _spherePositions;
@@ -80,9 +81,15 @@ protected:
 
   /* Spheres rendering */
   GL::Mesh _sphereMesh{NoCreate};
+  GL::Mesh _trailsMesh{NoCreate};
+  int _trailsCount = 0;
   GL::Buffer _sphereInstanceBuffer{NoCreate};
-  Shaders::PhongGL _sphereShader{NoCreate};
+  GL::Buffer _trailsInstanceBuffer{NoCreate};
+  Shaders::PhongGL  _sphereShader{NoCreate};
+  Shaders::FlatGL3D _trailsShader{NoCreate};
   Containers::Array<SphereInstanceData> _sphereInstanceData;
+  Containers::Array<SphereInstanceData> _trailsInstanceData;
+  const std::size_t kTrailLength = 32;
 
 private:
   sew::Atom * atom = new sew::Atom(0);  // Stupid initialization because of compiler error.
@@ -96,7 +103,7 @@ using namespace Math::Literals;
 
 ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments, NoCreate} {
   Utility::Arguments args;
-  args.addOption('s', "spheres", "10")
+  args.addOption('s', "spheres", "2")
           .setHelp("spheres", "number of spheres to simulate", "N")
       .addOption('r', "sphere-radius", "0.025")
           .setHelp("sphere-radius", "sphere radius", "R")
@@ -130,8 +137,8 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
           GL::Renderer::BlendFunction::SourceAlpha,
           GL::Renderer::BlendFunction::OneMinusSourceAlpha);
 
+      setSwapInterval(1);   // Set vsync on.
       /* Loop at 60 Hz max */
-      setSwapInterval(1);
       setMinimalLoopPeriod(16);   // 16 milliseconds.  60 Hz = 16.6667 milliseconds
   }
 
@@ -152,6 +159,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   _spherePositions = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereVelocities = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereInstanceData = Containers::Array<SphereInstanceData>{NoInit, numSpheres};
+  _trailsInstanceData = Containers::Array<SphereInstanceData>{NoInit, kTrailLength};
   atom = new sew::Atom(numSpheres);
   atom_ptr = atom->pars[0]->a_;
 
@@ -164,6 +172,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     _sphereInstanceData[i].color = Color4{(float)p->color[0]/255,
                                           (float)p->color[1]/255,
                                           (float)p->color[2]/255,
+                                          // Protons are more transparent than electrons.
                                           i > numSpheres/2 ? 0.30f : 0.7f};
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
@@ -171,7 +180,14 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     float sphere_radius = (p->is_electron ? 1 : 1.5) * _sphereRadius;
     _sphereInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[i]) *
                                                   Matrix4::scaling(Vector3{sphere_radius}) * 3;
-    _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();
+    _sphereInstanceData[i].        normalMatrix =
+    _sphereInstanceData[i].transformationMatrix.normalMatrix();
+  }
+  SphereInstanceData* p0 = &_sphereInstanceData[0];
+  for (int i=0; i<kTrailLength; i++) {
+    _trailsInstanceData[i].color                = p0->color;
+ _  _trailsInstanceData[i].transformationMatrix = p0->transformationMatrix;
+    _trailsInstanceData[i].        normalMatrix = p0->        normalMatrix;
   }
   std::cout << "\t sphere pos: " << _spherePositions[0][0]
               << " electron pos: " << atom->pars[0]->pos[0]
@@ -180,15 +196,22 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       _sphereShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}
           .setFlags(Shaders::PhongGL::Flag::VertexColor|
                       Shaders::PhongGL::Flag::InstancedTransformation)};
+      _trailsShader = Shaders::FlatGL3D{Shaders::FlatGL3D::Configuration{}};
       _sphereInstanceBuffer = GL::Buffer{};
+      _trailsInstanceBuffer = GL::Buffer{};
       _sphereMesh = MeshTools::compile(Primitives::icosphereSolid(2));
       _sphereMesh.addVertexBufferInstanced(_sphereInstanceBuffer, 1, 0,
           Shaders::PhongGL::TransformationMatrix{},
           Shaders::PhongGL::NormalMatrix{},
           Shaders::PhongGL::Color4{});
       _sphereMesh.setInstanceCount(_sphereInstanceData.size());
+      _trailsMesh = MeshTools::compile(Primitives::icosphereSolid(0));
+      _trailsMesh.addVertexBufferInstanced(_sphereInstanceBuffer, 1, 0,
+          Shaders::PhongGL::TransformationMatrix{},
+          Shaders::PhongGL::NormalMatrix{},
+          Shaders::PhongGL::Color4{});
+      _trailsMesh.setInstanceCount(++_trailsCount);
   }
-  assert(atom_ptr == atom->pars[0]->a_);
   // Start thread to move particles.
   move_particles_thread = std::thread(&ThreeDim::MoveParticlesThread, this);
   // move_particles_thread.detach(); // Avoids terminal error: terminate called without an active exception
@@ -196,7 +219,6 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
 
 std::mutex mutually_exclusive_lock;
 std::condition_variable condition_var;
-
 
 // Below runs as a separate thread.  Runs at most once for each frame draw.
 void ThreeDim::MoveParticlesThread() {
@@ -262,13 +284,21 @@ void ThreeDim::drawSpheres() {
   // Loop through all the spheres and update their transformation matrix
   for(std::size_t i = 0; i != _spherePositions.size(); ++i)
     _sphereInstanceData[i].transformationMatrix.translation() = _spherePositions[i];
+  if (_trailsCount < kTrailLength) {
+    _trailsCount++;
+     _trailsInstanceData[_trailsCount].transformationMatrix.translation() = _spherePositions[0];
+  }
 
   _sphereInstanceBuffer.setData(_sphereInstanceData, GL::BufferUsage::DynamicDraw);
+  _trailsInstanceBuffer.setData(_trailsInstanceData, GL::BufferUsage::DynamicDraw);
   _sphereShader
     .setProjectionMatrix(_projectionMatrix)
     .setTransformationMatrix(_arcballCamera->viewMatrix())
     .setNormalMatrix(_arcballCamera->viewMatrix().normalMatrix())
     .draw(_sphereMesh);
+  _trailsShader
+    .setTransformationProjectionMatrix(_arcballCamera->viewMatrix() * _projectionMatrix)
+    .draw(_trailsMesh);
 }
 
 // Handle window resize.
@@ -279,6 +309,7 @@ void ThreeDim::viewportEvent(ViewportEvent& event) {
   _projectionMatrix = Matrix4::perspectiveProjection(_arcballCamera->fov(),
       Vector2{event.framebufferSize()}.aspectRatio(), 0.01f, 100.0f);
 }
+
 
 void ThreeDim::keyPressEvent(KeyEvent& event) {
   if(event.key() == KeyEvent::Key::D) {
@@ -314,13 +345,11 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
       atom->FrameDrawStatisticsLoggingToggle();
   } else if(event.key() == KeyEvent::Key::Space) {
       animation_running ^= true;
-
   } else return;
 
   event.setAccepted();
   redraw();
 }
-
 
 
 void ThreeDim::mousePressEvent(MouseEvent& event) {
