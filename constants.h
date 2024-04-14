@@ -40,6 +40,8 @@ const SFloat kLithiumAtomSize = 152e-12;  // 152 picometers
 // const SFloat kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
 const SFloat kEFrequency = kEMassMEv / kHEv;
 const SFloat kPFrequency = kPMassMEv / kHEv;
+const SFloat kEPeriod = kHEv / kEMassMEv;
+const SFloat kPPeriod = kHEv / kPMassMEv;
 const int    kMaxParticles = 16;
 // For increased speed avoid lowering.  Instead increase threading.
 const int    kPFrequencySubDivisions =  32;

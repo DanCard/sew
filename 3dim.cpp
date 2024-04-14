@@ -71,7 +71,7 @@ protected:
   /* Points data as spheres with size */
   Containers::Array<Vector3> _spherePositions;
   Containers::Array<Vector3> _sphereVelocities;
-  Float _sphereRadius, _sphereVelocity;
+  Float _sphereRadius;
   volatile bool animation_running = true;
 
   /* Profiling */
@@ -82,14 +82,14 @@ protected:
   /* Spheres rendering */
   GL::Mesh _sphereMesh{NoCreate};
   GL::Mesh _trailsMesh{NoCreate};
-  int _trailsCount = 0;
+  int _trailsIndex = 0;
   GL::Buffer _sphereInstanceBuffer{NoCreate};
   GL::Buffer _trailsInstanceBuffer{NoCreate};
   Shaders::PhongGL  _sphereShader{NoCreate};
   Shaders::FlatGL3D _trailsShader{NoCreate};
   Containers::Array<SphereInstanceData> _sphereInstanceData;
   Containers::Array<SphereInstanceData> _trailsInstanceData;
-  const std::size_t kTrailLength = 32;
+  const std::size_t kTrailLength = 64;
 
 private:
   sew::Atom * atom = new sew::Atom(0);  // Stupid initialization because of compiler error.
@@ -111,48 +111,49 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       .parse(arguments.argc, arguments.argv);
 
   _sphereRadius = args.value<Float>("sphere-radius");
-  sew::Atom * atom_ptr;
-  // Setup window and parameters
-  {
-      const Vector2 dpiScaling = this->dpiScaling({});
-      Configuration conf;
-      conf.setTitle("Subatomic particles as Standing Electromagnetic Waves (SEW)")
-          .setSize({1024+512+256, 1024+512+256}, dpiScaling)
-          .setWindowFlags(Configuration::WindowFlag::Resizable);
-      Debug{} << "size:" << conf.size() << "dpiScaling:" << dpiScaling << "max:" << dpiScaling.max();
-      GLConfiguration glConf;
-      glConf.setSampleCount(dpiScaling.max() < 2.0f ? 8 : 2);
-      // glConf.set
-      if(!tryCreate(conf, glConf)) {
-          create(conf, glConf.setSampleCount(0));
-      }
 
-      SDL_SetWindowPosition(this->window(), 40, 0);
 
-      GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-      // https://doc.magnum.graphics/magnum/classMagnum_1_1Shaders_1_1PhongGL.html#Shaders-PhongGL-alpha
-      GL::Renderer::enable(GL::Renderer::Feature::Blending);
-      GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
-      GL::Renderer::setBlendFunction(
-          GL::Renderer::BlendFunction::SourceAlpha,
-          GL::Renderer::BlendFunction::OneMinusSourceAlpha);
+  { // Setup window and parameters
+    const Vector2 dpiScaling = this->dpiScaling({});
+    Configuration conf;
+    conf.setTitle("Subatomic particles as Standing Electromagnetic Waves (SEW)")
+        .setSize({1024+512+256, 1024+512+128}, dpiScaling)
+        .setWindowFlags(Configuration::WindowFlag::Resizable);
+    Debug{} << "size:" << conf.size() << "dpiScaling:" << dpiScaling << "max:" << dpiScaling.max();
+    GLConfiguration glConf;
+    glConf.setSampleCount(dpiScaling.max() < 2.0f ? 8 : 2);
+    Debug{} << "size:" << conf.size() << "dpiScaling:" << dpiScaling << "max:" << dpiScaling.max();
+    // glConf.set
+    if(!tryCreate(conf, glConf)) {
+        create(conf, glConf.setSampleCount(0));
+    }
 
-      setSwapInterval(1);   // Set vsync on.
-      /* Loop at 60 Hz max */
-      setMinimalLoopPeriod(16);   // 16 milliseconds.  60 Hz = 16.6667 milliseconds
+    SDL_SetWindowPosition(this->window(), 40, 0);
+
+    GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+    // https://doc.magnum.graphics/magnum/classMagnum_1_1Shaders_1_1PhongGL.html#Shaders-PhongGL-alpha
+    GL::Renderer::enable(GL::Renderer::Feature::Blending);
+    GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
+    GL::Renderer::setBlendFunction(
+        GL::Renderer::BlendFunction::SourceAlpha,
+        GL::Renderer::BlendFunction::OneMinusSourceAlpha);
+
+    setSwapInterval(1);   // Set vsync on.
+    /* Loop at 60 Hz max */
+    setMinimalLoopPeriod(16);   // 16 milliseconds.  60 Hz = 16.6667 milliseconds
   }
 
   // Setup camera
   {
-      const Vector3 eye = Vector3::zAxis(5.0f);
-      const Vector3 viewCenter;
-      const Vector3 up = Vector3::yAxis();
-      const Deg fov = 45.0_degf;
-      _arcballCamera.emplace(eye, viewCenter, up, fov, windowSize());
-      _arcballCamera->setLagging(0.85f);
+    const Vector3 eye = Vector3::zAxis(5.0f);
+    const Vector3 viewCenter;
+    const Vector3 up = Vector3::yAxis();
+    const Deg fov = 45.0_degf;
+    _arcballCamera.emplace(eye, viewCenter, up, fov, windowSize());
+    _arcballCamera->setLagging(0.85f);
 
-      _projectionMatrix = Matrix4::perspectiveProjection(fov,
-          Vector2{framebufferSize()}.aspectRatio(), 0.01f, 100.0f);
+    _projectionMatrix = Matrix4::perspectiveProjection(fov, Vector2{framebufferSize()}.aspectRatio(), 0.01f, 100.0f);
+    Debug{} << "projectionMatrix:" << _projectionMatrix;
   }
 
   numSpheres = args.value<UnsignedInt>("spheres");
@@ -161,35 +162,41 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   _sphereInstanceData = Containers::Array<SphereInstanceData>{NoInit, numSpheres};
   _trailsInstanceData = Containers::Array<SphereInstanceData>{NoInit, kTrailLength};
   atom = new sew::Atom(numSpheres);
-  atom_ptr = atom->pars[0]->a_;
 
   _spherePositions[0] = Vector3{
       static_cast<float>(atom->pars[0]->pos[0] / kScale),
       static_cast<float>(atom->pars[0]->pos[1] / kScale),
       static_cast<float>(atom->pars[0]->pos[2] / kScale)};
-  for (int i=0; i<numSpheres; i++) {
+  for (unsigned int i=0; i<numSpheres; i++) {
     sew::Particle *p = atom->pars[i];
-    _sphereInstanceData[i].color = Color4{(float)p->color[0]/255,
-                                          (float)p->color[1]/255,
-                                          (float)p->color[2]/255,
+    _sphereInstanceData[i].color = Color4{static_cast<float>(p->color[0])/255,
+                                          static_cast<float>(p->color[1])/255,
+                                          static_cast<float>(p->color[2])/255,
                                           // Protons are more transparent than electrons.
                                           i > numSpheres/2 ? 0.30f : 0.7f};
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
-    float sphere_radius = (p->is_electron ? 1 : 1.5) * _sphereRadius;
+    float sphere_radius = (p->is_electron ? 1 : 1.5f) * _sphereRadius;
     _sphereInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[i]) *
                                                   Matrix4::scaling(Vector3{sphere_radius}) * 3;
-    _sphereInstanceData[i].        normalMatrix =
-    _sphereInstanceData[i].transformationMatrix.normalMatrix();
+    _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();
   }
+  Debug{} << " sphere transformation Matrix:" << _sphereInstanceData[0].transformationMatrix;
+  sew::Particle *p = atom->pars[0];
   SphereInstanceData* p0 = &_sphereInstanceData[0];
-  for (int i=0; i<kTrailLength; i++) {
-    _trailsInstanceData[i].color                = p0->color;
- _  _trailsInstanceData[i].transformationMatrix = p0->transformationMatrix;
-    _trailsInstanceData[i].        normalMatrix = p0->        normalMatrix;
+  for (std::size_t i=0; i<kTrailLength; i++) {
+    _trailsInstanceData[i].color = Color4{static_cast<float>(p->color[0])/255,
+                                          static_cast<float>(p->color[1])/255,
+                                          static_cast<float>(p->color[2])/255,
+                                          // Protons are more transparent than electrons.
+                                          0.1f};
+    _trailsInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[0])
+                             * Matrix4::scaling(Vector3{0.1f}) * 1e-9f;
+    _trailsInstanceData[i].        normalMatrix = p0->normalMatrix;
   }
-  std::cout << "\t sphere pos: " << _spherePositions[0][0]
+  Debug{} << " trail transformation Matrix:" << _trailsInstanceData[0].transformationMatrix;
+  std::cout << "     sphere pos: " << _spherePositions[0][0]
               << " electron pos: " << atom->pars[0]->pos[0]
               << std::endl;
   {        // Rendering spheres / particles.
@@ -210,7 +217,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
           Shaders::PhongGL::TransformationMatrix{},
           Shaders::PhongGL::NormalMatrix{},
           Shaders::PhongGL::Color4{});
-      _trailsMesh.setInstanceCount(++_trailsCount);
+      _trailsMesh.setInstanceCount(kTrailLength);
   }
   // Start thread to move particles.
   move_particles_thread = std::thread(&ThreeDim::MoveParticlesThread, this);
@@ -259,7 +266,7 @@ void ThreeDim::drawEvent() {
 
   if(animation_running) {
     // atom.MoveParticlesThread();
-    for (int i=0; i<numSpheres; i++) {
+    for (unsigned int i=0; i<numSpheres; i++) {
       for (int j=0; j<3; j++) {
         _spherePositions[i][j] = static_cast<float>(atom->pars[i]->pos[j] / kScale);
       }
@@ -284,10 +291,8 @@ void ThreeDim::drawSpheres() {
   // Loop through all the spheres and update their transformation matrix
   for(std::size_t i = 0; i != _spherePositions.size(); ++i)
     _sphereInstanceData[i].transformationMatrix.translation() = _spherePositions[i];
-  if (_trailsCount < kTrailLength) {
-    _trailsCount++;
-     _trailsInstanceData[_trailsCount].transformationMatrix.translation() = _spherePositions[0];
-  }
+  _trailsIndex = ++_trailsIndex % kTrailLength;
+  _trailsInstanceData[_trailsIndex].transformationMatrix.translation() = _spherePositions[0];
 
   _sphereInstanceBuffer.setData(_sphereInstanceData, GL::BufferUsage::DynamicDraw);
   _trailsInstanceBuffer.setData(_trailsInstanceData, GL::BufferUsage::DynamicDraw);
@@ -297,7 +302,7 @@ void ThreeDim::drawSpheres() {
     .setNormalMatrix(_arcballCamera->viewMatrix().normalMatrix())
     .draw(_sphereMesh);
   _trailsShader
-    .setTransformationProjectionMatrix(_arcballCamera->viewMatrix() * _projectionMatrix)
+    .setTransformationProjectionMatrix((_projectionMatrix * _arcballCamera->viewMatrix()))
     .draw(_trailsMesh);
 }
 

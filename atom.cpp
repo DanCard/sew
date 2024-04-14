@@ -15,6 +15,7 @@ namespace sew {
 Atom::Atom(int numParticles) :
          num_particles(numParticles), long_dt(kLongDt), short_dt(kShortDtFast) {
     if (num_particles == 0) return;
+    std::cout << "\t Electron period: " << kEPeriod << " proton period: " << kPPeriod << std::endl;
     logger = new sew::Logger(this);
     std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron
       << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
