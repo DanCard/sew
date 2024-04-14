@@ -48,7 +48,6 @@ public:
     animation_running = false;
     NotifyDrawEvent();  // Inform thread to stop waiting on draw event.
     // std::cout << "\t Requesting MoveParticlesThread() thread to terminate." << std::endl;
-
     move_particles_thread.join();
   }
 
@@ -84,15 +83,18 @@ protected:
   GL::Mesh _trailsMesh{NoCreate};
   int _trailsIndex = 0;
   GL::Buffer _sphereInstanceBuffer{NoCreate};
-  GL::Buffer _trailsInstanceBuffer{NoCreate};
+  // GL::Buffer _trailsInstanceBuffer{NoCreate};
   Shaders::PhongGL  _sphereShader{NoCreate};
-  Shaders::FlatGL3D _trailsShader{NoCreate};
+  Shaders::PhongGL _trailsShader{NoCreate};
+  // Couldn't get the below to work.
+  // Shaders::FlatGL3D _trailsShader{NoCreate};
   Containers::Array<SphereInstanceData> _sphereInstanceData;
   Containers::Array<SphereInstanceData> _trailsInstanceData;
   const std::size_t kTrailLength = 64;
 
 private:
-  sew::Atom * atom = new sew::Atom(0);  // Stupid initialization because of compiler error.
+  // sew::Atom * atom = new sew::Atom(0);  // Stupid initialization because of compiler error.
+  sew::Atom * atom = nullptr;
   UnsignedInt numSpheres;    // Number of subatomic particles to simulate in the atom.
   std::thread move_particles_thread;
   volatile bool move_particles_thread_run = true;
@@ -101,6 +103,7 @@ private:
 
 using namespace Math::Literals;
 
+// Constructor
 ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments, NoCreate} {
   Utility::Arguments args;
   args.addOption('s', "spheres", "2")
@@ -157,7 +160,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
   }
 
   numSpheres = args.value<UnsignedInt>("spheres");
-  _spherePositions = Containers::Array<Vector3>{NoInit, numSpheres};
+  _spherePositions  = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereVelocities = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereInstanceData = Containers::Array<SphereInstanceData>{NoInit, numSpheres};
   _trailsInstanceData = Containers::Array<SphereInstanceData>{NoInit, kTrailLength};
@@ -191,8 +194,8 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
                                           static_cast<float>(p->color[2])/255,
                                           // Protons are more transparent than electrons.
                                           0.1f};
-    _trailsInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[0])
-                             * Matrix4::scaling(Vector3{0.1f}) * 1e-9f;
+    _trailsInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[0]) *
+                                                  Matrix4::scaling(Vector3{0.1f});
     _trailsInstanceData[i].        normalMatrix = p0->normalMatrix;
   }
   Debug{} << " trail transformation Matrix:" << _trailsInstanceData[0].transformationMatrix;
@@ -203,9 +206,9 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       _sphereShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}
           .setFlags(Shaders::PhongGL::Flag::VertexColor|
                       Shaders::PhongGL::Flag::InstancedTransformation)};
-      _trailsShader = Shaders::FlatGL3D{Shaders::FlatGL3D::Configuration{}};
+      _trailsShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}};
       _sphereInstanceBuffer = GL::Buffer{};
-      _trailsInstanceBuffer = GL::Buffer{};
+      // _trailsInstanceBuffer = GL::Buffer{};
       _sphereMesh = MeshTools::compile(Primitives::icosphereSolid(2));
       _sphereMesh.addVertexBufferInstanced(_sphereInstanceBuffer, 1, 0,
           Shaders::PhongGL::TransformationMatrix{},
