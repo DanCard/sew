@@ -65,7 +65,7 @@ protected:
   void drawSpheres();
 
   Containers::Optional<ArcBall> _arcballCamera;
-  Matrix4 _projectionMatrix;  // Something related to the camera
+  Matrix4 _projectionMatrix;     // Used for camera
 
   /* Points data as spheres with size */
   Containers::Array<Vector3> _spherePositions;
