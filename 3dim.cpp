@@ -51,7 +51,6 @@ public:
     move_particles_thread.join();
   }
 
-
 protected:
   void viewportEvent(ViewportEvent& event) override;      // Handle window resize
   void keyPressEvent(KeyEvent& event) override;
@@ -83,8 +82,8 @@ protected:
   GL::Mesh _trailsMesh{NoCreate};
   int _trailsIndex = 0;
   GL::Buffer _sphereInstanceBuffer{NoCreate};
-  // GL::Buffer _trailsInstanceBuffer{NoCreate};
-  Shaders::PhongGL  _sphereShader{NoCreate};
+  GL::Buffer _trailsInstanceBuffer{NoCreate};
+  Shaders::PhongGL _sphereShader{NoCreate};
   Shaders::PhongGL _trailsShader{NoCreate};
   // Couldn't get the below to work.
   // Shaders::FlatGL3D _trailsShader{NoCreate};
@@ -114,7 +113,6 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       .parse(arguments.argc, arguments.argv);
 
   _sphereRadius = args.value<Float>("sphere-radius");
-
 
   { // Setup window and parameters
     const Vector2 dpiScaling = this->dpiScaling({});
@@ -146,8 +144,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     setMinimalLoopPeriod(16);   // 16 milliseconds.  60 Hz = 16.6667 milliseconds
   }
 
-  // Setup camera
-  {
+  { // Setup camera
     const Vector3 eye = Vector3::zAxis(5.0f);
     const Vector3 viewCenter;
     const Vector3 up = Vector3::yAxis();
@@ -180,7 +177,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
-    float sphere_radius = (p->is_electron ? 1 : 1.5f) * _sphereRadius;
+    float sphere_radius = (p->is_electron ? 1.0f : 1.5f) * _sphereRadius;
     _sphereInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[i]) *
                                                   Matrix4::scaling(Vector3{sphere_radius}) * 3;
     _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();
@@ -192,10 +189,9 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     _trailsInstanceData[i].color = Color4{static_cast<float>(p->color[0])/255,
                                           static_cast<float>(p->color[1])/255,
                                           static_cast<float>(p->color[2])/255,
-                                          // Protons are more transparent than electrons.
-                                          0.1f};
+                                          0.1f  /* Transparancy for trail */ };
     _trailsInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[0]) *
-                                                  Matrix4::scaling(Vector3{0.1f});
+                                                  Matrix4::scaling(Vector3{.01f}) * 3;
     _trailsInstanceData[i].        normalMatrix = p0->normalMatrix;
   }
   Debug{} << " trail transformation Matrix:" << _trailsInstanceData[0].transformationMatrix;
@@ -204,19 +200,21 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
               << std::endl;
   {        // Rendering spheres / particles.
       _sphereShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}
-          .setFlags(Shaders::PhongGL::Flag::VertexColor|
+            .setFlags(Shaders::PhongGL::Flag::VertexColor|
                       Shaders::PhongGL::Flag::InstancedTransformation)};
-      _trailsShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}};
+      _trailsShader = Shaders::PhongGL{Shaders::PhongGL::Configuration{}
+            .setFlags(Shaders::PhongGL::Flag::VertexColor|
+                      Shaders::PhongGL::Flag::InstancedTransformation)};
       _sphereInstanceBuffer = GL::Buffer{};
-      // _trailsInstanceBuffer = GL::Buffer{};
+      _trailsInstanceBuffer = GL::Buffer{};
       _sphereMesh = MeshTools::compile(Primitives::icosphereSolid(2));
+      _trailsMesh = MeshTools::compile(Primitives::icosphereSolid(2));
       _sphereMesh.addVertexBufferInstanced(_sphereInstanceBuffer, 1, 0,
           Shaders::PhongGL::TransformationMatrix{},
           Shaders::PhongGL::NormalMatrix{},
           Shaders::PhongGL::Color4{});
       _sphereMesh.setInstanceCount(_sphereInstanceData.size());
-      _trailsMesh = MeshTools::compile(Primitives::icosphereSolid(0));
-      _trailsMesh.addVertexBufferInstanced(_sphereInstanceBuffer, 1, 0,
+      _trailsMesh.addVertexBufferInstanced(_trailsInstanceBuffer, 1, 0,
           Shaders::PhongGL::TransformationMatrix{},
           Shaders::PhongGL::NormalMatrix{},
           Shaders::PhongGL::Color4{});
@@ -268,7 +266,7 @@ void ThreeDim::drawEvent() {
   _profiler.beginFrame();
 
   if(animation_running) {
-    // atom.MoveParticlesThread();
+    // Update positions.  Positions are updated in MoveParticlesThread().
     for (unsigned int i=0; i<numSpheres; i++) {
       for (int j=0; j<3; j++) {
         _spherePositions[i][j] = static_cast<float>(atom->pars[i]->pos[j] / kScale);
@@ -305,7 +303,9 @@ void ThreeDim::drawSpheres() {
     .setNormalMatrix(_arcballCamera->viewMatrix().normalMatrix())
     .draw(_sphereMesh);
   _trailsShader
-    .setTransformationProjectionMatrix((_projectionMatrix * _arcballCamera->viewMatrix()))
+    .setProjectionMatrix(_projectionMatrix)
+    .setTransformationMatrix(_arcballCamera->viewMatrix())
+    .setNormalMatrix(_arcballCamera->viewMatrix().normalMatrix())
     .draw(_trailsMesh);
 }
 
