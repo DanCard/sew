@@ -37,7 +37,7 @@ namespace sew {
       else         log_line << (w->was_energy_dissipated_since_last_logged_to_screen ? " <E" : "   ");
     }
     if (dv_logging) {
-      log_line << " d⋅v " << std::setw( 4) << std::fixed
+      log_line << " d⋅v " << std::setw( 4) << std::fixed << std::setprecision(1)
                << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
                << std::scientific;
     }
@@ -76,7 +76,7 @@ namespace sew {
         << " ke"  << std::setw( 9) << a_->total_kinetic_energy
         << " te"  << std::setw( 9) << a_->total_energy;
     }
-    if (frame_draw_statistics_logging) {
+    if (frame_draw_stats_logging) {
       log_line
               // Late.  Drawing event already occurred.
               << " L " << std::setw(2)
@@ -96,8 +96,10 @@ namespace sew {
     if (time_logging) {
       log_line << " t " << std::scientific << std::setprecision(3) << std::setw(9) << a_->time_;
     }
-    log_line << " chng"  << std::setw(8) << std::setprecision(1) << w->pos_change_magnitude
-             << " dtsltu " << std::setprecision(1) << w->dist_traveled_since_last_trail_update;
+    if (trail_logging) {
+      log_line << " chng"  << std::setw(8) << std::setprecision(1) << w->pos_change_magnitude
+               << " dtsltu " << std::setprecision(1) << w->dist_traveled_since_last_trail_update;
+    }
     /*
     for (int i=0; i<num_particles_; ++i) {
       if (i == id || i == par_closest_id) continue;
@@ -143,27 +145,22 @@ namespace sew {
     w->ConsiderLoggingToFile(a_->count);
   }
 
-  void Logger::ChargeLoggingToggle() {charge_logging = !charge_logging;  }
-  void Logger::DtLoggingToggle    () {dt_logging     = !dt_logging    ;  }
-  void Logger::EnergyLoggingToggle() {energy_logging = !energy_logging;  }
-  void Logger::FastLoggingToggle  () {fast_logging   = !fast_logging  ;  }
-  void Logger::DvModeToggle       () {dv_logging     = !dv_logging    ;  }
-  void Logger::FrameDrawStatisticsLogToggle() {
-    frame_draw_statistics_logging = !frame_draw_statistics_logging;
-  }
-  void Logger::IterationsLoggingToggle() {
-    iterations_logging = !iterations_logging;
-  }
+  void Logger::ChargeLoggingToggle() { charge_logging = !charge_logging;  }
+  void Logger::DtLoggingToggle    () { dt_logging     = !dt_logging    ;  }
+  void Logger::EnergyLoggingToggle() { energy_logging = !energy_logging;  }
+  void Logger::FastLoggingToggle  () { fast_logging   = !fast_logging  ;  }
+  void Logger::DvModeToggle       () { dv_logging     = !dv_logging    ;  }
+  void Logger::FrameDrawStatsLogToggle() {frame_draw_stats_logging = !frame_draw_stats_logging; }
+  void Logger::IterationsLoggingToggle() {iterations_logging = !iterations_logging; }
+  void Logger::TrailLoggingToggle () { trail_logging = !trail_logging;  }
   void Logger::PositionLoggingToggle() {position_logging = !position_logging; }
-  void Logger::PercentEnergyDissipatedToggle() {
+  void Logger::PercentEnergyDissipateToggle() {
     percent_energy_dissipated_logging = !percent_energy_dissipated_logging;
   }
   void Logger::VelocityComponentsLogToggle() {velocity_component_logging = !velocity_component_logging;}
-  void Logger::VelocityLoggingToggle() {velocity_logging = !velocity_logging; }
-  void Logger::TimeLoggingToggle    () {time_logging     = !time_logging    ; }
-  void Logger::WallClockLoggingToggle() {
-    wall_clock_time_logging = !wall_clock_time_logging;
-  }
+  void Logger::VelocityLoggingToggle() { velocity_logging = !velocity_logging; }
+  void Logger::TimeLoggingToggle    () { time_logging     = !time_logging    ; }
+  void Logger::WallClockLoggingToggle() { wall_clock_time_logging = !wall_clock_time_logging; }
 
 
 

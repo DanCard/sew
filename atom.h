@@ -68,7 +68,7 @@ public:
   void DtLoggingToggle();
   void EnergyLoggingToggle();
   void FastLoggingToggle();
-  void FrameDrawStatisticsLogToggle();
+  void FrameDrawStatsLogToggle();
   void IterationsLoggingToggle();
   void PositionLoggingToggle();
   void VelocityLoggingToggle();
@@ -84,6 +84,8 @@ public:
     void DvModeToggle();
 
     void VelocityComponentsLogToggle();
+
+    void TrailLoggingToggle();
 
 private:
   void CalcAveragePotentialEnergy();

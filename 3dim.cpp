@@ -347,6 +347,7 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
   } else if(event.key() == KeyEvent::Key::F) { atom->FastModeToggle();
   } else if(event.key() == KeyEvent::Key::G) { atom->DvModeToggle();
   } else if(event.key() == KeyEvent::Key::I) { atom->IterationsLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::L) { atom->TrailLoggingToggle();
   } else if(event.key() == KeyEvent::Key::O) { if(_profiler.isEnabled()) _profiler.enable();
   } else if(event.key() == KeyEvent::Key::P) { atom->PositionLoggingToggle();
   } else if(event.key() == KeyEvent::Key::Q) {
@@ -355,13 +356,12 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
   } else if(event.key() == KeyEvent::Key::R) { _arcballCamera->reset();
   } else if(event.key() == KeyEvent::Key::S) { atom->SlowMode();
   } else if(event.key() == KeyEvent::Key::T) { atom->TimeLoggingToggle();
-  } else if(event.key() == KeyEvent::Key::U) {
-           atom->VelocityComponentsLogToggle();
+  } else if(event.key() == KeyEvent::Key::U) { atom->VelocityComponentsLogToggle();
   } else if(event.key() == KeyEvent::Key::V) { atom->VelocityLoggingToggle();
   } else if(event.key() == KeyEvent::Key::W) { atom->WallClockLogToggle();
   } else if(event.key() == KeyEvent::Key::X) { atom->FastLoggingToggle();
   } else if(event.key() == KeyEvent::Key::Y) { atom->PercentEnergyDissipatedToggle();
-  } else if(event.key() == KeyEvent::Key::Z) { atom->FrameDrawStatisticsLogToggle();
+  } else if(event.key() == KeyEvent::Key::Z) { atom->FrameDrawStatsLogToggle();
   } else if(event.key() == KeyEvent::Key::Space) {
       animation_running ^= true;
   } else return;

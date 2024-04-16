@@ -28,27 +28,28 @@ class Logger {
 
     explicit Logger(Atom *a);
 
-    bool charge_logging = false;
+    bool charge_logging = true;
     bool dt_logging = false;
     bool energy_logging = false;
     bool fast_logging = false;
-    bool dv_logging = false;
-    bool frame_draw_statistics_logging = true;
-    bool iterations_logging = true;
-    bool position_logging = false;
+    bool dv_logging = true;
+    bool frame_draw_stats_logging = true;
+    bool iterations_logging = false;
+    bool trail_logging = false;
+    bool position_logging = true;
     bool percent_energy_dissipated_logging = false;
     bool time_logging = false;
     bool wall_clock_time_logging = false;
     bool velocity_logging = true;
-    bool velocity_component_logging = false;
+    bool velocity_component_logging = true;
 
     void DtLoggingToggle();
     void EnergyLoggingToggle();
     void FastLoggingToggle();
-    void FrameDrawStatisticsLogToggle();
+    void FrameDrawStatsLogToggle();
     void IterationsLoggingToggle();
     void PositionLoggingToggle();
-    void PercentEnergyDissipatedToggle();
+    void PercentEnergyDissipateToggle();
     void VelocityLoggingToggle();
     void TimeLoggingToggle();
     void WallClockLoggingToggle();
@@ -95,6 +96,8 @@ class Logger {
     void DvModeToggle();
 
     void VelocityComponentsLogToggle();
+
+    void TrailLoggingToggle();
 
 private:
     const std::chrono::_V2::system_clock::time_point start_time_;
