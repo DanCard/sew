@@ -68,18 +68,20 @@ public:
   void DtLoggingToggle();
   void EnergyLoggingToggle();
   void FastLoggingToggle();
-  void FrameDrawStatisticsLoggingToggle();
+  void FrameDrawStatisticsLogToggle();
   void IterationsLoggingToggle();
   void PositionLoggingToggle();
   void VelocityLoggingToggle();
-  void PercentEnergyDissipatedLoggingToggle();
+  void PercentEnergyDissipatedToggle();
   void FastModeToggle();
   void SlowMode();
   bool IsSlowMode() const;
   void TimeLoggingToggle();
-  void WallClockToggle();
+  void WallClockLogToggle();
 
     void ChargeLoggingToggle();
+
+    void DvModeToggle();
 
 private:
   void CalcAveragePotentialEnergy();

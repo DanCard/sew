@@ -17,7 +17,11 @@ Atom::Atom(int numParticles) :
     if (num_particles == 0) return;
     std::cout << "\t Electron period: " << kEPeriod << " proton period: " << kPPeriod << std::endl;
     logger = new sew::Logger(this);
-    std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron
+    std::cout << "  kMaxPosChangeDesiredPerFrame " << kMaxPosChangeDesiredPerFrame
+      << "  kBhorRadius " << kBohrRadius << "  kBohrRadiusProton " << kBohrRadiusProton
+      << "  kLithiumAtomSize " << kLithiumAtomSize
+      << std::endl;
+    std::cout << "  max speed electron " << kMaxSpeedElectron
       << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
       << "  kEFrequencySubDivisions " << kEFrequencySubDivisions
               << "\t kShortDt " << kShortDtSlow << "  kLongDt " << kLongDt << std::endl;
@@ -207,17 +211,17 @@ void Atom::MoveParticles() {
   }
 
   void Atom::ChargeLoggingToggle() {logger->ChargeLoggingToggle();  }
-  void Atom::DtLoggingToggle    () {logger->DtLoggingToggle();      }
+  void Atom::DtLoggingToggle    () {logger->DtLoggingToggle    ();  }
   void Atom::EnergyLoggingToggle() {logger->EnergyLoggingToggle();  }
-  void Atom::FastLoggingToggle  () {logger->FastLoggingToggle();    }
+  void Atom::FastLoggingToggle  () {logger->FastLoggingToggle  ();  }
+  void Atom::DvModeToggle       () {logger->DvModeToggle       ();  }  // g key
   void Atom::IterationsLoggingToggle() {logger->IterationsLoggingToggle();  }
-  void Atom::FrameDrawStatisticsLoggingToggle() { logger->FrameDrawStatisticsLoggingToggle();  }
+  void Atom::FrameDrawStatisticsLogToggle() { logger->FrameDrawStatisticsLogToggle(); }
   void Atom::PositionLoggingToggle() {logger->PositionLoggingToggle();  }
-  void Atom::PercentEnergyDissipatedLoggingToggle() {logger->PercentEnergyDissipatedLoggingToggle();  }
+  void Atom::PercentEnergyDissipatedToggle() { logger->PercentEnergyDissipatedToggle(); }
   void Atom::VelocityLoggingToggle() {logger->VelocityLoggingToggle();}
   void Atom::FastModeToggle     () {short_dt = (kShortDtSlow == short_dt) ? kLongDtFast : kShortDtSlow;  }
   void Atom::SlowMode           () {short_dt = kShortDtSlow;  }
-  bool Atom::IsSlowMode         () const {return short_dt == kShortDtSlow;} 
   void Atom::TimeLoggingToggle  () {logger->TimeLoggingToggle();  }
-  void Atom::WallClockToggle    () {logger->WallClockLoggingToggle();  }
+  void Atom::WallClockLogToggle () {logger->WallClockLoggingToggle();  }
 } // namespace

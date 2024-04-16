@@ -357,6 +357,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     }
     *fast_fraction_ptr = fast_fraction;
     new_dt = a_->long_dt + ((a_->short_dt - kLongDt) * inverse_exponential);
+    percent_energy_dissipated = 0;
     // Dissipate energy when heading away.
     if (dist_vel_dot_prod >= 0
      && orig_vel_dot_prod >= 0

@@ -28,18 +28,21 @@ namespace sew {
       << "  dis"  << std::setw(10) << (w->is_electron ? w->dist_mag_closest : w->pos_magnitude)
       << "  vel " << std::setw(10) << w->vel_mag
       << (velocity_logging ? Log3dArray(w->vel, "v") : "")
-      << (w->energy_dissipated ? " *" : "  ") << std::fixed << std::setprecision(1)
-      << "d⋅v " << std::setw( 4) << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
-      << std::scientific << std::setprecision(2)
-      ;
+      << (w->energy_dissipated ? " *" : "  ") << std::setprecision(1);
+    if (dv_logging) {
+      log_line << "d⋅v " << std::setw( 4) << std::fixed
+               << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
+               << std::scientific;
+    }
     if (dt_logging) {
-      log_line << "  dt"   << std::setw( 9) << a_->dt;    // << " new " << new_dt
+      log_line << "  dt"   << std::setw( 8) << a_->dt;    // << " new " << new_dt
     }
     if (fast_logging) {
-      log_line << " fast"  << std::setw(10) << std::setprecision(3) << w->fast_fraction;
+      log_line << " fast"  << std::setw(10) << std::setprecision(3)
+               << w->fast_fraction;
     }
     if (percent_energy_dissipated_logging) {
-      log_line << std::setw(10) << percent_energy_dissipated_logging;
+      log_line << std::setw(10) << std::setprecision(3) << w->percent_energy_dissipated << '%';
     }
     log_line
       << std::setprecision(2)
@@ -51,7 +54,6 @@ namespace sew {
    // << Log3dArray(magnet_fs, "tB"  )
    // << "  B "   << sqrt(magnet_fs[0]*magnet_fs[0] + magnet_fs[1]*magnet_fs[1] + magnet_fs[2]*magnet_fs[2])
    // << Log3dArray(acceleration, "a")
-      << " chng"  << std::setw(6) << std::setprecision(0) << w->pos_magnitude
    // << Log3dArray(pos_change, "chng") << std::setprecision(1)
       << (position_logging ? Log3dArray(w->pos, "pos") : "");
    // << " min pos change " << min_pos_change_desired
@@ -90,7 +92,8 @@ namespace sew {
     if (time_logging) {
       log_line << " t " << std::scientific << std::setprecision(3) << std::setw(9) << a_->time_;
     }
-    log_line << " d t s l t u " << std::setprecision(1) << w->dist_traveled_since_last_trail_update;
+    log_line << " chng"  << std::setw(8) << std::setprecision(1) << w->pos_magnitude
+             << " dtsltu " << std::setprecision(1) << w->dist_traveled_since_last_trail_update;
     /*
     for (int i=0; i<num_particles_; ++i) {
       if (i == id || i == par_closest_id) continue;
@@ -102,9 +105,12 @@ namespace sew {
 
   // Log a particle and misc info.
   void Logger::LogStuff(Particle* w) {
+    static int milliseconds_to_wait_before_logging = 400;
     static std::chrono::_V2::system_clock::time_point last_log_time;
+    /*
     bool dist_reset = w->prev_dist_traveled_since_last_trail_update
                         >  w->dist_traveled_since_last_trail_update;
+    */
 
     // Log based on time interval to console.
     auto now = std::chrono::system_clock::now();
@@ -113,10 +119,10 @@ namespace sew {
      //        ||  w->flipped_dis_vel_dot_prod
                ;
     if (do_log
-     || (dist_reset && w->id == 0)
+     // || (dist_reset && w->id == 0)
      || (w->id == w_to_log_id &&
         std::chrono::duration_cast<std::chrono::milliseconds>(
-        now - last_log_time).count() > 800)) {
+        now - last_log_time).count() > milliseconds_to_wait_before_logging)) {
       SetColorForConsole(w->color[0], w->color[1], w->color[2]);
       // std::cout << std::endl;
       std::string log_line_str = FormatLogLine(w, false);
@@ -127,6 +133,8 @@ namespace sew {
       w_to_log_id = (w_to_log_id + 1) % a_->num_particles;
       w->log_count--;
       w->logToBuffer(log_line_str);
+      if (milliseconds_to_wait_before_logging < 1200)
+        milliseconds_to_wait_before_logging += 50;
       return;
     }
     // Didn't log to screen so consider logging to just file.
@@ -137,14 +145,15 @@ namespace sew {
   void Logger::DtLoggingToggle    () {dt_logging     = !dt_logging    ;  }
   void Logger::EnergyLoggingToggle() {energy_logging = !energy_logging;  }
   void Logger::FastLoggingToggle  () {fast_logging   = !fast_logging  ;  }
-  void Logger::FrameDrawStatisticsLoggingToggle() {
+  void Logger::DvModeToggle       () {dv_logging     = !dv_logging    ;  }
+  void Logger::FrameDrawStatisticsLogToggle() {
     frame_draw_statistics_logging = !frame_draw_statistics_logging;
   }
   void Logger::IterationsLoggingToggle() {
     iterations_logging = !iterations_logging;
   }
   void Logger::PositionLoggingToggle() {position_logging = !position_logging; }
-  void Logger::PercentEnergyDissipatedLoggingToggle() {
+  void Logger::PercentEnergyDissipatedToggle() {
     percent_energy_dissipated_logging = !percent_energy_dissipated_logging;
   }
   void Logger::VelocityLoggingToggle() {velocity_logging = !velocity_logging; }
@@ -152,5 +161,6 @@ namespace sew {
   void Logger::WallClockLoggingToggle() {
     wall_clock_time_logging = !wall_clock_time_logging;
   }
+
 
 } // namespace
