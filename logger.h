@@ -40,6 +40,7 @@ class Logger {
     bool time_logging = false;
     bool wall_clock_time_logging = false;
     bool velocity_logging = false;
+    bool velocity_component_logging = false;
 
     void DtLoggingToggle();
     void EnergyLoggingToggle();
@@ -92,6 +93,8 @@ class Logger {
     void ChargeLoggingToggle();
 
     void DvModeToggle();
+
+    void VelocityComponentsLogToggle();
 
 private:
     const std::chrono::_V2::system_clock::time_point start_time_;

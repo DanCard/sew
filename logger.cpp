@@ -25,24 +25,27 @@ namespace sew {
       << std::setw(8) << a_->count << (w->is_electron ? " e" : " p") << w->id
       << "⋅" << (par_closest->is_electron ? "e" : "p") << w->par_closest_id
       << std::scientific << std::setprecision(3)
-      << "  dis"  << std::setw(10) << (w->is_electron ? w->dist_mag_closest : w->pos_magnitude)
-      << "  vel " << std::setw(10) << w->vel_mag
-      << (velocity_logging ? Log3dArray(w->vel, "v") : "")
-      << (w->energy_dissipated ? " *" : "  ") << std::setprecision(1);
+      << "  dis"  << std::setw(10) << (w->is_electron ? w->dist_mag_closest : w->pos_magnitude);
+    if (velocity_logging) {
+      log_line << "  vel " << std::setw(10) << w->vel_mag;
+    }
+    if (velocity_component_logging) log_line << (velocity_logging ? Log3dArray(w->vel, "v") : "");
+    if (percent_energy_dissipated_logging)
+         log_line << std::setw(10) << std::setprecision(3) << w->percent_energy_dissipated << '%';
+    else log_line << (w->energy_dissipated ? " *" : "  ");
+    assert(w->energy_dissipated ? w->percent_energy_dissipated > 0 : w->percent_energy_dissipated == 0);
     if (dv_logging) {
       log_line << "d⋅v " << std::setw( 4) << std::fixed
                << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
                << std::scientific;
     }
     if (dt_logging) {
-      log_line << "  dt"   << std::setw( 8) << a_->dt;    // << " new " << new_dt
+      log_line << "  dt" << std::setw( 8) << std::setprecision(1)
+               << a_->dt;    // << " new " << new_dt
     }
     if (fast_logging) {
       log_line << " fast"  << std::setw(10) << std::setprecision(3)
                << w->fast_fraction;
-    }
-    if (percent_energy_dissipated_logging) {
-      log_line << std::setw(10) << std::setprecision(3) << w->percent_energy_dissipated << '%';
     }
     log_line
       << std::setprecision(2)
@@ -92,7 +95,7 @@ namespace sew {
     if (time_logging) {
       log_line << " t " << std::scientific << std::setprecision(3) << std::setw(9) << a_->time_;
     }
-    log_line << " chng"  << std::setw(8) << std::setprecision(1) << w->pos_magnitude
+    log_line << " chng"  << std::setw(8) << std::setprecision(1) << w->pos_change_magnitude
              << " dtsltu " << std::setprecision(1) << w->dist_traveled_since_last_trail_update;
     /*
     for (int i=0; i<num_particles_; ++i) {
@@ -156,11 +159,13 @@ namespace sew {
   void Logger::PercentEnergyDissipatedToggle() {
     percent_energy_dissipated_logging = !percent_energy_dissipated_logging;
   }
+  void Logger::VelocityComponentsLogToggle() {velocity_component_logging = !velocity_component_logging;}
   void Logger::VelocityLoggingToggle() {velocity_logging = !velocity_logging; }
   void Logger::TimeLoggingToggle    () {time_logging     = !time_logging    ; }
   void Logger::WallClockLoggingToggle() {
     wall_clock_time_logging = !wall_clock_time_logging;
   }
+
 
 
 } // namespace

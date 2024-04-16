@@ -307,12 +307,6 @@ void ThreeDim::drawSpheres() {
   for(std::size_t i = 0; i < numSpheres; ++i) {
     auto s_pos = _spherePositions[i];
     _sphereInstanceData[i].transformationMatrix.translation() = s_pos;
-    /*
-    if (i==0)
-      std::cout << " tr "  << std::setprecision(0)
-                << atom->pars[i]->dist_traveled_since_last_trail_update
-                << " ";
-    */
     if (atom->pars[i]->dist_traveled_since_last_trail_update >
         sew::Atom::kMaxPosChangeDesiredPerFrame) {
       atom->pars[i]->dist_traveled_since_last_trail_update = 0;
@@ -362,6 +356,8 @@ void ThreeDim::keyPressEvent(KeyEvent& event) {
   } else if(event.key() == KeyEvent::Key::R) { _arcballCamera->reset();
   } else if(event.key() == KeyEvent::Key::S) { atom->SlowMode();
   } else if(event.key() == KeyEvent::Key::T) { atom->TimeLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::U) {
+           atom->VelocityComponentsLogToggle();
   } else if(event.key() == KeyEvent::Key::V) { atom->VelocityLoggingToggle();
   } else if(event.key() == KeyEvent::Key::W) { atom->WallClockLogToggle();
   } else if(event.key() == KeyEvent::Key::X) { atom->FastLoggingToggle();

@@ -219,9 +219,11 @@ void Atom::MoveParticles() {
   void Atom::FrameDrawStatisticsLogToggle() { logger->FrameDrawStatisticsLogToggle(); }
   void Atom::PositionLoggingToggle() {logger->PositionLoggingToggle();  }
   void Atom::PercentEnergyDissipatedToggle() { logger->PercentEnergyDissipatedToggle(); }
+  void Atom::VelocityComponentsLogToggle() {logger->VelocityComponentsLogToggle();}
   void Atom::VelocityLoggingToggle() {logger->VelocityLoggingToggle();}
   void Atom::FastModeToggle     () {short_dt = (kShortDtSlow == short_dt) ? kLongDtFast : kShortDtSlow;  }
   void Atom::SlowMode           () {short_dt = kShortDtSlow;  }
   void Atom::TimeLoggingToggle  () {logger->TimeLoggingToggle();  }
   void Atom::WallClockLogToggle () {logger->WallClockLoggingToggle();  }
+
 } // namespace

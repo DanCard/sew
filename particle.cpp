@@ -413,13 +413,14 @@ void Particle::ConsiderLoggingToFile(int count) {
         << "  Teleporting to other side of "
         << (close->is_electron ? "electron" : "proton")
         << ".  Position " << pos[0] << " " << pos[1] << " " << pos[2]
-        << "  proton pos x " << close->pos[0] << " y " << close->pos[1] << " z " << close->pos[2]
         << std::endl;
     // Teleport the particle to other side of the close by particle.
     for (int i = 0; i < 3; ++i) {
       pos[i] += -2 * dist_closest[i];
     }
-    tee << "\t Teleported to " << pos[0] << " " << pos[1] << " " << pos[2] << std::endl;
+    tee << "\t Teleported to " << pos[0] << " " << pos[1] << " " << pos[2]
+        << "  proton pos x " << close->pos[0] << " y " << close->pos[1] << " z " << close->pos[2]
+        << std::endl;
     v_when_teleported = vel_mag;
     log_count = 1;               // Force extra logging after this event.
     close->log_file << "\t\t\t" << (is_electron ? "e" : "p") << id << " teleported "  << std::endl;
@@ -448,16 +449,17 @@ void Particle::ConsiderLoggingToFile(int count) {
                           dist_unit_vec[1] * vel_unit_vec[1] +
                           dist_unit_vec[2] * vel_unit_vec[2];
     }
-    // Calc position unit vector
     pos_magnitude = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]);
-    dist_traveled_since_last_trail_update += pos_magnitude;
-    // atomic_update(&dist_traveled_since_last_trail_update, pos_magnitude);
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 3; ++i) {               // Calculate position unit vector
       pos_unit_vec[i] = pos[i] / pos_magnitude;
     }
     orig_vel_dot_prod = pos_unit_vec[0] * vel_unit_vec[0] +
                         pos_unit_vec[1] * vel_unit_vec[1] +
                         pos_unit_vec[2] * vel_unit_vec[2];
+    // pos_change_magnitude used to decide if we have moved enough for current frame.
+    pos_change_magnitude = std::sqrt(pos_change[0]*pos_change[0]
+                                     + pos_change[1]*pos_change[1] + pos_change[2]*pos_change[2]);
+    dist_traveled_since_last_trail_update += pos_change_magnitude;
     // If it is a proton don't care if it is heading away or towards electrons,
     // Since don't have ejection issue with protons.
     if (!is_electron) {
@@ -470,23 +472,12 @@ void Particle::ConsiderLoggingToFile(int count) {
     // If they are perpendicular, it's 0. If they are pointing in opposite directions, it's -1.
     NewDt(&fast_fraction);
 
-    // pos_change_magnitude used to decide if we have moved enough for current frame.
-    pos_change_magnitude = std::sqrt(pos_change[0]*pos_change[0]
-                                   + pos_change[1]*pos_change[1] + pos_change[2]*pos_change[2]);
     // When particles are on top of each other forces approach infinity.
     // To get around that problem we teleport to other side of particle.
     // Alternative approach is to have a preprogrammed path and not bother with force calcs.
     if (is_electron) {
       TeleportIfTooCloseToProton();
     }
-  }
-
-  void Particle::atomic_update(std::atomic<SFloat>* atomic1, SFloat magnitude) {
-    SFloat oldValue, newValue;
-    do {
-      oldValue = atomic1->load();
-      newValue = oldValue + magnitude;
-    } while (!atomic1->compare_exchange_weak(oldValue, newValue));
   }
 
 } // namespace

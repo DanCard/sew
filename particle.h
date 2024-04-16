@@ -203,7 +203,6 @@ public:
   // If the simulation won't work because of large errors because of huge forces.
   void TeleportIfTooCloseToProton();
   void ApplyForces();
-  void atomic_update(std::atomic<SFloat>* atomic1, SFloat magnitude);
 };
 
 

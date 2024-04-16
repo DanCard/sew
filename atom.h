@@ -83,6 +83,8 @@ public:
 
     void DvModeToggle();
 
+    void VelocityComponentsLogToggle();
+
 private:
   void CalcAveragePotentialEnergy();
   void CalcEnergyOfAtom();
