@@ -30,12 +30,14 @@ namespace sew {
       log_line << "  vel " << std::setw(10) << w->vel_mag;
     }
     if (velocity_component_logging) log_line << (velocity_logging ? Log3dArray(w->vel, "v") : "");
-    if (percent_energy_dissipated_logging)
-         log_line << std::setw(10) << std::setprecision(3) << w->percent_energy_dissipated << '%';
-    else log_line << (w->energy_dissipated ? " *" : "  ");
-    assert(w->energy_dissipated ? w->percent_energy_dissipated > 0 : w->percent_energy_dissipated == 0);
+    if (percent_energy_dissipated_logging) {
+      log_line << std::setw(10) << std::setprecision(3) << w->percent_energy_dissipated << '%';
+    } else {
+      if (to_file) log_line << (w->was_energy_dissipated ? " *E" : "   ");
+      else         log_line << (w->was_energy_dissipated_since_last_logged_to_screen ? " <E" : "   ");
+    }
     if (dv_logging) {
-      log_line << "d⋅v " << std::setw( 4) << std::fixed
+      log_line << " d⋅v " << std::setw( 4) << std::fixed
                << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
                << std::scientific;
     }
@@ -47,9 +49,8 @@ namespace sew {
       log_line << " fast"  << std::setw(10) << std::setprecision(3)
                << w->fast_fraction;
     }
-    log_line
-      << std::setprecision(2)
-      << "  f"    << std::setw(9) << w->force_mag_closest
+    log_line << " f"    << std::setw(9) << std::setprecision(2)
+             << w->force_mag_closest
    // << Log3dArray(forces  , " fs")
    // << " Bv " << sqrt(pow(b_force_by_oth_vel[0], 2) + pow(b_force_by_oth_vel[1], 2) + pow(b_force_by_oth_vel[2], 2))
    // << " Bi " << std::setw( 9) << sqrt(pow(b_f_intrinsic[0], 2) + pow(b_f_intrinsic[1], 2) + pow(b_f_intrinsic[2], 2))
@@ -108,7 +109,7 @@ namespace sew {
 
   // Log a particle and misc info.
   void Logger::LogStuff(Particle* w) {
-    static int milliseconds_to_wait_before_logging = 400;
+    static int milliseconds_to_wait_before_logging = 500;
     static std::chrono::_V2::system_clock::time_point last_log_time;
     /*
     bool dist_reset = w->prev_dist_traveled_since_last_trail_update
@@ -117,10 +118,7 @@ namespace sew {
 
     // Log based on time interval to console.
     auto now = std::chrono::system_clock::now();
-    bool do_log =  w->log_count > 0
-     //        || (w->energy_dissipated && !w->energy_dissipated_prev)
-     //        ||  w->flipped_dis_vel_dot_prod
-               ;
+    bool do_log =  w->log_count > 0;
     if (do_log
      // || (dist_reset && w->id == 0)
      || (w->id == w_to_log_id &&
@@ -135,6 +133,7 @@ namespace sew {
       last_log_time = now;
       w_to_log_id = (w_to_log_id + 1) % a_->num_particles;
       w->log_count--;
+      w->was_energy_dissipated_since_last_logged_to_screen = false;
       w->logToBuffer(log_line_str);
       if (milliseconds_to_wait_before_logging < 1200)
         milliseconds_to_wait_before_logging += 50;

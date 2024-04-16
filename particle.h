@@ -1,6 +1,5 @@
 #ifndef PARTICLE_H
 #define PARTICLE_H
-#include <atomic>
 #include <cassert>
 #include <cmath>   // For M_PI constant and other match functions such as round.
 #include <fstream>
@@ -40,7 +39,6 @@ public:
   // need a random starting point between 0 and 2 pi
   const SFloat q_amplitude;   // Amplitude of charge.  Set to e = kQ
 
-  // initial charge ?= (static_cast<SFloat>(rand()) / RAND_MAX) * 2 * M_PI; // NOLINT(*-msc50-cpp)
   // See ChargeSinusoidal for how this is used:
   // return avg_q + (q_amplitude * sin((frequency * time_ * 2 * M_PI) + initial_charge));
   // Want paired particles to be at opposite ends of the sine wave.
@@ -100,7 +98,9 @@ public:
   // Determine if electron is coming or going relative to closest proton.
   // For proton indicates if coming or going relative to center.
   SFloat       dist_vel_dot_prod;
-  bool energy_dissipated = false;      // When leaving proton, dissipate energy.
+  // Due to energy gain problem, sometimes dissipate energy when moving away from center of atom.
+  bool was_energy_dissipated = false;
+  bool was_energy_dissipated_since_last_logged_to_screen = false;
   SFloat percent_energy_dissipated;
   int num_allowed_escapes_for_energy_capping;
 
@@ -123,7 +123,6 @@ public:
   std::ofstream& log_file = tee_logger.get_file_stream();
   // std::atomic<SFloat> dist_traveled_since_last_trail_update{0};
   volatile SFloat dist_traveled_since_last_trail_update = 0;
-  SFloat     prev_dist_traveled_since_last_trail_update = 0;
 
   explicit Particle(int id, bool is_electron, Atom* a,
                     SFloat mass_mev, SFloat mass_kg, SFloat avg_q, SFloat q_amplitude,

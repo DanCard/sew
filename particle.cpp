@@ -1,5 +1,4 @@
 #include "particle.h"
-#include <atomic>
 #include <cassert>
 #include <cmath>   // For M_PI constant and other match functions such as round.
 #include <iostream>
@@ -21,7 +20,7 @@ Particle::Particle(int id, bool is_electron, Atom* a,
           // Want paired particles to be at opposite ends of the sine wave.
           // In other words to be a half cycle away.
           // This causes one electron to be at -2e charge, while the other is at 0 charge.
-          initial_charge(id%2 == 0 ? 0 : M_PI),
+          initial_charge(id%2 == 0 ? 0 : M_PIf),
           max_dist_allow(max_dist_allowed),
           max_speed_allow(max_speed_allowed),
           logger(logger),
@@ -57,8 +56,6 @@ void Particle::log_prev_log_lines(int max_lines_to_log) {
 
 
 void Particle::ConsiderLoggingToFile(int count) {
-    bool dist_reset = prev_dist_traveled_since_last_trail_update > dist_traveled_since_last_trail_update;
-
     SFloat danger_speed = max_speed_allow / 2;
 
     bool particles_are_close      = dist_mag_closest < (kCloseToTrouble * 2);
@@ -81,15 +78,12 @@ void Particle::ConsiderLoggingToFile(int count) {
       || (count%(ll* 2) == 0 && fast_fraction < 0.0002f && particles_are_close_very)
       || (count% ll     == 0 && vel_mag  > danger_speed && particles_are_close_very)
       || fast_fraction_changed_significantly
-      || dist_reset
     ) {
       std::string log_source = " ?";
       if (log_count > 0) {
         log_source = " L";
       } else if (fast_fraction_changed_significantly) {
         log_source = " F";
-      } else if (dist_reset) {
-        log_source = " D";
       } else {
         for (int i = 16; i > 0; i /= 2) {
           if (count % (ll*i) == 0) {
@@ -104,7 +98,6 @@ void Particle::ConsiderLoggingToFile(int count) {
       log_count--;
       logToBuffer(log_line_str);
     }
-    prev_dist_traveled_since_last_trail_update = dist_traveled_since_last_trail_update;
   }
 
   void Particle::HandleEscape() {
@@ -168,14 +161,14 @@ void Particle::ConsiderLoggingToFile(int count) {
     // Frequency is kEFrequency or kPFrequency.
     // 
     // Charge = e + e * sin(2 * pi * frequency * time + initial_charge)
-    return avg_q + (q_amplitude * std::sin((frequency * a_->time_ * 2.0f * (float)M_PI) + initial_charge));
+    return avg_q +
+           q_amplitude * std::sin(frequency * a_->time_ * 2.0f * M_PIf + initial_charge);
   }
 
   void Particle::InitVarsToCalcForces() {
     dist_mag_closest  = 1;      // 1 represents a large number that will be overwritten
                                 // quickly when checking for closest.
     par_closest = nullptr;
-    energy_dissipated = false;
     for (SFloat & force : forces) {
       force = 0;
     }
@@ -358,12 +351,14 @@ void Particle::ConsiderLoggingToFile(int count) {
     *fast_fraction_ptr = fast_fraction;
     new_dt = a_->long_dt + ((a_->short_dt - kLongDt) * inverse_exponential);
     percent_energy_dissipated = 0;
+    was_energy_dissipated = false;
     // Dissipate energy when heading away.
     if (dist_vel_dot_prod >= 0
      && orig_vel_dot_prod >= 0
      && dist_mag_closest > (kCloseToTrouble*16)) {
       if (a_->total_energy_cap != 0 && a_->total_energy_cap < a_->total_energy) {
-        energy_dissipated = true;
+        was_energy_dissipated = true;
+        was_energy_dissipated_since_last_logged_to_screen = true;
         for (SFloat & v : vel) {
           // Will cause total energy to drop.
           // Should be relative to size of dt.  Small dt less energy loss.
@@ -397,7 +392,7 @@ void Particle::ConsiderLoggingToFile(int count) {
 
     close->log_prev_log_lines(1);
            log_prev_log_lines(1);
-    tee << "\t Teleporting because force too high. " << (is_electron ? "e" : "p") << id
+    tee << "\t Teleporting because force too high. " << "e" << id
         << "  distance velocity dot product " << dist_vel_dot_prod
         << "  force magnitude " << force_magnitude
         << " x " << forces[0] << " y " << forces[1] << " z " << forces[2] << std::endl;
@@ -423,7 +418,7 @@ void Particle::ConsiderLoggingToFile(int count) {
         << std::endl;
     v_when_teleported = vel_mag;
     log_count = 1;               // Force extra logging after this event.
-    close->log_file << "\t\t\t" << (is_electron ? "e" : "p") << id << " teleported "  << std::endl;
+    close->log_file << "\t\t\t" << "e" << id << " teleported "  << std::endl;
     // if (num_particles_ > 2)
     close->log_count = 1;          // Force extra logging for other particle.
   }
