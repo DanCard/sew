@@ -37,7 +37,8 @@ public:
   volatile int n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event = 0;
 
   // Delta time in seconds.
-  SFloat dt = kShortDt;
+  // SFloat dt = kShortDtSlow;
+  SFloat dt = kLongDtFast;
   SFloat time_ = 0;
   int    count = 0;         // Invocation count of moving particles.
   SFloat total_potential_energy = 0;
@@ -55,6 +56,11 @@ public:
   SFloat long_dt;
   SFloat short_dt;
 
+  // Lets not move faster than it would take an electron to go from center to edge,
+  // faster than two seconds.
+  constexpr static const SFloat kMaxPosChangeDesiredPerFrame = kBohrRadius / 60;  // 60 fps
+
+
   explicit Atom(int numParticles);
 
   void MoveParticles();
@@ -69,8 +75,11 @@ public:
   void PercentEnergyDissipatedLoggingToggle();
   void FastModeToggle();
   void SlowMode();
+  bool IsSlowMode() const;
   void TimeLoggingToggle();
   void WallClockToggle();
+
+    void ChargeLoggingToggle();
 
 private:
   void CalcAveragePotentialEnergy();

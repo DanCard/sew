@@ -13,14 +13,14 @@
 namespace sew {
 
 Atom::Atom(int numParticles) :
-         num_particles(numParticles), long_dt(kLongDt), short_dt(kShortDtFast) {
+         num_particles(numParticles), long_dt(kLongDt), short_dt(kShortDtSlow) {
     if (num_particles == 0) return;
     std::cout << "\t Electron period: " << kEPeriod << " proton period: " << kPPeriod << std::endl;
     logger = new sew::Logger(this);
     std::cout << "\t\t\t max speed electron " << kMaxSpeedElectron
       << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
       << "  kEFrequencySubDivisions " << kEFrequencySubDivisions
-              << "\t kShortDt " << kShortDt << "  kLongDt " << kLongDt << std::endl;
+              << "\t kShortDt " << kShortDtSlow << "  kLongDt " << kLongDt << std::endl;
     std::cout << "\t\t\t\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
     const SFloat nucleus_initial_radius = kBohrRadiusProton * (num_particles / 2);
@@ -32,6 +32,7 @@ Atom::Atom(int numParticles) :
     else if (num_particles <= 6)  divider = 4;
     else                          divider = 8;  // With more particles don't brighten as much.
     bool is_electron = true;
+    // Create the subatomic particles.
     for (int i = 0; i < numParticles; ++i) {
       Particle* p;
       if (i < numParticles / 2) {
@@ -50,6 +51,8 @@ Atom::Atom(int numParticles) :
           p->color[1] = 120;
           p->color[2] = 120;
         }
+        for (int j = 0; j < 3; ++j)
+            p->pos[j] = ((float)(std::rand() / (RAND_MAX + 1.0)) - 0.5f) * electron_initial_radius;
       } else {
         is_electron = false;
         pars[i] = new Proton(i, this, logger, nucleus_initial_radius * 2);
@@ -61,23 +64,22 @@ Atom::Atom(int numParticles) :
         if (i == 1) {
           p->pos[0] = 0;
         }
+        for (int j = 0; j < 3; ++j)
+            p->pos[j] = ((float)(std::rand() / (RAND_MAX + 1.0)) - 0.5f) * nucleus_initial_radius;
       }
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " " << int(p->color[2]);
       // SFloat max_dist = p->max_dist_allow * 0.5;
       for (int j = 0; j < 3; ++j) {
-        // if (num_particles > 2) {
-          // Set random locations
-          p->pos[j] = (float)(std::rand() / (RAND_MAX + 1.0)) - 0.5f
-           * (is_electron ? nucleus_initial_radius : electron_initial_radius);
-        // }
         // Increase brightness
         int increase = p->color[j] / divider;
         if (p->color[j] + increase > 255) p->color[j]  = 255;
         else                              p->color[j] += increase;
       }
+      /*
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " "           << int(p->color[2]) << std::endl;
+      */
       std::cout << "\t\t pos " << p->pos[0] << " " << p->pos[1] << " " << p->pos[2] << std::endl;
     }
     for (SFloat & p_energy_cycle_ : pot_energy_cycle) {
@@ -197,28 +199,25 @@ void Atom::MoveParticles() {
       count++;      // Num iterations of move particles.
 
       for (int j = 0; j < num_particles; ++j) {
-        // Lets not move faster than it would take an electron to go from center to edge,
-        // faster than two seconds.
-        const SFloat max_pos_change_desired = kBohrRadius / (60*2);  // 60 fps
-        if (pos_change_per_particle[j] > max_pos_change_desired) {
+        if (pos_change_per_particle[j] > kMaxPosChangeDesiredPerFrame) {
           return;
         }
       }
     }
   }
 
-  void Atom::DtLoggingToggle    () {logger->DtLoggingToggle();}
+  void Atom::ChargeLoggingToggle() {logger->ChargeLoggingToggle();  }
+  void Atom::DtLoggingToggle    () {logger->DtLoggingToggle();      }
   void Atom::EnergyLoggingToggle() {logger->EnergyLoggingToggle();  }
-  void Atom::FastLoggingToggle  () {logger->FastLoggingToggle();  }
+  void Atom::FastLoggingToggle  () {logger->FastLoggingToggle();    }
   void Atom::IterationsLoggingToggle() {logger->IterationsLoggingToggle();  }
   void Atom::FrameDrawStatisticsLoggingToggle() { logger->FrameDrawStatisticsLoggingToggle();  }
   void Atom::PositionLoggingToggle() {logger->PositionLoggingToggle();  }
   void Atom::PercentEnergyDissipatedLoggingToggle() {logger->PercentEnergyDissipatedLoggingToggle();  }
   void Atom::VelocityLoggingToggle() {logger->VelocityLoggingToggle();}
-  void Atom::FastModeToggle     () {short_dt = (kShortDt == short_dt) ? kShortDtFast : kShortDt;  }
-  void Atom::SlowMode           () {short_dt = kShortDt;  }
+  void Atom::FastModeToggle     () {short_dt = (kShortDtSlow == short_dt) ? kLongDtFast : kShortDtSlow;  }
+  void Atom::SlowMode           () {short_dt = kShortDtSlow;  }
+  bool Atom::IsSlowMode         () const {return short_dt == kShortDtSlow;} 
   void Atom::TimeLoggingToggle  () {logger->TimeLoggingToggle();  }
   void Atom::WallClockToggle    () {logger->WallClockLoggingToggle();  }
-
-
 } // namespace

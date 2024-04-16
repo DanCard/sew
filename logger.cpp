@@ -15,42 +15,22 @@ namespace sew {
     a_(a), start_time_(std::chrono::_V2::system_clock::now()) {
   }
 
-  void Logger::DtLoggingToggle() {
-    dt_logging = !dt_logging;
-  }
-
-  void Logger::EnergyLoggingToggle() {
-    energy_logging = !energy_logging;
-  }
-
-  void Logger::FastLoggingToggle() {
-    fast_logging = !fast_logging;
-  }
-
+  void Logger::ChargeLoggingToggle() {charge_logging = !charge_logging;  }
+  void Logger::DtLoggingToggle    () {dt_logging     = !dt_logging    ;  }
+  void Logger::EnergyLoggingToggle() {energy_logging = !energy_logging;  }
+  void Logger::FastLoggingToggle  () {fast_logging   = !fast_logging  ;  }
   void Logger::FrameDrawStatisticsLoggingToggle() {
     frame_draw_statistics_logging = !frame_draw_statistics_logging;
   }
-
   void Logger::IterationsLoggingToggle() {
     iterations_logging = !iterations_logging;
   }
-
-  void Logger::PositionLoggingToggle() {
-    position_logging = !position_logging;
-  }
-
+  void Logger::PositionLoggingToggle() {position_logging = !position_logging; }
   void Logger::PercentEnergyDissipatedLoggingToggle() {
     percent_energy_dissipated_logging = !percent_energy_dissipated_logging;
   }
-
-  void Logger::VelocityLoggingToggle() {
-    velocity_logging = !velocity_logging;
-  }
-
-  void Logger::TimeLoggingToggle() {
-    time_logging = !time_logging;
-  }
-
+  void Logger::VelocityLoggingToggle() {velocity_logging = !velocity_logging; }
+  void Logger::TimeLoggingToggle    () {time_logging     = !time_logging    ; }
   void Logger::WallClockLoggingToggle() {
     wall_clock_time_logging = !wall_clock_time_logging;
   }
@@ -93,13 +73,15 @@ namespace sew {
    // << Log3dArray(acceleration, "a")
    // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
    // << Log3dArray(pos_change, "chng") << std::setprecision(1)
-      << (position_logging ? Log3dArray(w->pos, "pos") : "")
+      << (position_logging ? Log3dArray(w->pos, "pos") : "");
    // << " min pos change " << min_pos_change_desired
    // << round(fast_fraction * 10) * 10 << '%'
-                  << std::setw( 6) << std::setprecision(1) << std::fixed 
+    if (charge_logging) {
+      log_line    << std::setw( 6) << std::setprecision(1) << std::fixed
       << " chrg"  << std::setw( 4) << static_cast<int>(std::round((w->freq_charge / w->avg_q) * 100.0f)) << '%'
       << " oth"   << std::setw( 4)
       << static_cast<int>(std::round((charge_of_closest / par_closest->q_amplitude) * 100.0f)) << '%';
+    }
    // << " inv"   << std::setw(12) << inverse_exponential
     if (energy_logging || to_file) {
       log_line << std::scientific << std::setprecision(2)
@@ -118,12 +100,12 @@ namespace sew {
               << a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event;
     }
     if (iterations_logging) {
-      log_line << " i" << std::setw(5) << a_->iter;
+      log_line << " it" << std::setw(5) << a_->iter;
     }
     if (wall_clock_time_logging || to_file) {
       auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(
               std::chrono::_V2::system_clock::now() - start_time_);
-      log_line << " w " << std::setw(6) << elapsed_time.count();
+      log_line << " mi " << std::setw(6) << elapsed_time.count();
     }
     if (time_logging) {
       log_line << " t " << std::scientific << std::setprecision(3) << std::setw(9) << a_->time_;
@@ -151,6 +133,7 @@ namespace sew {
         std::chrono::duration_cast<std::chrono::milliseconds>(
         now - last_log_time).count() > 1200)) {
       SetColorForConsole(w->color[0], w->color[1], w->color[2]);
+      std::cout << std::endl;
       std::string log_line_str = FormatLogLine(w, false);
       a_->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event = 0;
       a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event = 0;

@@ -11,7 +11,7 @@
 #include <Magnum/MeshTools/Compile.h>
 #include <Magnum/Platform/Sdl2Application.h>
 #include <Magnum/Primitives/Icosphere.h>
-#include <Magnum/Shaders/FlatGL.h>
+// #include <Magnum/Shaders/FlatGL.h>
 #include <Magnum/Shaders/PhongGL.h>
 #include <Magnum/Trade/MeshData.h>
 #include <mutex>
@@ -19,6 +19,7 @@
 
 #include "arcball/ArcBall.h"
 #include "atom.h"
+#include "constants.h"
 
 namespace Magnum { namespace Examples {
 
@@ -34,6 +35,7 @@ const SFloat kScale = 1e-11;    // Number arrived by trial and refinement.
 struct SphereInstanceData {
     Matrix4 transformationMatrix;
     Matrix3x3 normalMatrix;
+    __attribute__((unused))
     Color4 color;
 };
 
@@ -88,16 +90,19 @@ protected:
   // Couldn't get the below to work.
   // Shaders::FlatGL3D _trailsShader{NoCreate};
   Containers::Array<SphereInstanceData> _sphereInstanceData;
+  static const std::size_t kTrailLength = 32;
   Containers::Array<SphereInstanceData> _trailsInstanceData;
-  const std::size_t kTrailLength = 64;
 
 private:
   // sew::Atom * atom = new sew::Atom(0);  // Stupid initialization because of compiler error.
   sew::Atom * atom = nullptr;
   UnsignedInt numSpheres;    // Number of subatomic particles to simulate in the atom.
+  UnsignedInt numTrails;
   std::thread move_particles_thread;
   volatile bool move_particles_thread_run = true;
   void NotifyDrawEvent();
+  // int electron_skipped_update_trails_count = 0;
+  // int proton_skipped_update_trails_count = 0;
 };
 
 using namespace Math::Literals;
@@ -111,6 +116,9 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
           .setHelp("sphere-radius", "sphere radius", "R")
       .addSkippedPrefix("magnum")
       .parse(arguments.argc, arguments.argv);
+  numSpheres = args.value<UnsignedInt>("spheres");
+  assert(numSpheres <= sew::kMaxParticles);
+  numTrails = numSpheres * kTrailLength;
 
   _sphereRadius = args.value<Float>("sphere-radius");
 
@@ -156,11 +164,10 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     Debug{} << "projectionMatrix:" << _projectionMatrix;
   }
 
-  numSpheres = args.value<UnsignedInt>("spheres");
   _spherePositions  = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereVelocities = Containers::Array<Vector3>{NoInit, numSpheres};
   _sphereInstanceData = Containers::Array<SphereInstanceData>{NoInit, numSpheres};
-  _trailsInstanceData = Containers::Array<SphereInstanceData>{NoInit, kTrailLength};
+  _trailsInstanceData = Containers::Array<SphereInstanceData>{NoInit, numTrails};
   atom = new sew::Atom(numSpheres);
 
   _spherePositions[0] = Vector3{
@@ -183,16 +190,22 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();
   }
   Debug{} << " sphere transformation Matrix:" << _sphereInstanceData[0].transformationMatrix;
-  sew::Particle *p = atom->pars[0];
-  SphereInstanceData* p0 = &_sphereInstanceData[0];
-  for (std::size_t i=0; i<kTrailLength; i++) {
-    _trailsInstanceData[i].color = Color4{static_cast<float>(p->color[0])/255,
-                                          static_cast<float>(p->color[1])/255,
-                                          static_cast<float>(p->color[2])/255,
-                                          0.1f  /* Transparancy for trail */ };
-    _trailsInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[0]) *
+  // How to set the sphere number?
+  // It just increments each time.
+  int sphere_i = 0;
+  sew::Particle *pars = atom->pars[0];
+  SphereInstanceData* inst = &_sphereInstanceData[0];
+  for (std::size_t i=0; i<numTrails; i++) {
+    _trailsInstanceData[i].color = Color4{static_cast<float>(pars->color[0])/255,
+                                          static_cast<float>(pars->color[1])/255,
+                                          static_cast<float>(pars->color[2])/255,
+                                          0.1f  /* Transparency for trail */ };
+    _trailsInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[sphere_i]) *
                                                   Matrix4::scaling(Vector3{.01f}) * 3;
-    _trailsInstanceData[i].        normalMatrix = p0->normalMatrix;
+    _trailsInstanceData[i].        normalMatrix = inst->normalMatrix;
+    sphere_i = ++sphere_i % numSpheres;
+    pars = atom->pars[sphere_i];
+    inst = &_sphereInstanceData[sphere_i];
   }
   Debug{} << " trail transformation Matrix:" << _trailsInstanceData[0].transformationMatrix;
   std::cout << "     sphere pos: " << _spherePositions[0][0]
@@ -208,17 +221,17 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
       _sphereInstanceBuffer = GL::Buffer{};
       _trailsInstanceBuffer = GL::Buffer{};
       _sphereMesh = MeshTools::compile(Primitives::icosphereSolid(2));
-      _trailsMesh = MeshTools::compile(Primitives::icosphereSolid(2));
+      _trailsMesh = MeshTools::compile(Primitives::icosphereSolid(0));
       _sphereMesh.addVertexBufferInstanced(_sphereInstanceBuffer, 1, 0,
           Shaders::PhongGL::TransformationMatrix{},
           Shaders::PhongGL::NormalMatrix{},
           Shaders::PhongGL::Color4{});
-      _sphereMesh.setInstanceCount(_sphereInstanceData.size());
       _trailsMesh.addVertexBufferInstanced(_trailsInstanceBuffer, 1, 0,
           Shaders::PhongGL::TransformationMatrix{},
           Shaders::PhongGL::NormalMatrix{},
           Shaders::PhongGL::Color4{});
-      _trailsMesh.setInstanceCount(kTrailLength);
+       _sphereMesh.setInstanceCount(_sphereInstanceData.size());
+       _trailsMesh.setInstanceCount(numTrails);
   }
   // Start thread to move particles.
   move_particles_thread = std::thread(&ThreeDim::MoveParticlesThread, this);
@@ -289,11 +302,25 @@ void ThreeDim::drawEvent() {
 }
 
 void ThreeDim::drawSpheres() {
+  _trailsIndex  = _trailsIndex % numTrails;
   // Loop through all the spheres and update their transformation matrix
-  for(std::size_t i = 0; i != _spherePositions.size(); ++i)
-    _sphereInstanceData[i].transformationMatrix.translation() = _spherePositions[i];
-  _trailsIndex = ++_trailsIndex % kTrailLength;
-  _trailsInstanceData[_trailsIndex].transformationMatrix.translation() = _spherePositions[0];
+  for(std::size_t i = 0; i < numSpheres; ++i) {
+    auto s_pos = _spherePositions[i];
+    _sphereInstanceData[i].transformationMatrix.translation() = s_pos;
+    if (i==0)
+      std::cout << " tr "  << std::setprecision(0)
+                << atom->pars[i]->dist_traveled_since_last_trail_update
+                << " ";
+    if (atom->pars[i]->dist_traveled_since_last_trail_update >
+        sew::Atom::kMaxPosChangeDesiredPerFrame) {
+      atom->pars[i]->dist_traveled_since_last_trail_update = 0;
+      _trailsInstanceData[_trailsIndex].transformationMatrix.translation() = s_pos;
+      atom->pars[i]->dist_traveled_since_last_trail_update = 0;
+      if (i==0)
+      std::cout << " * ";
+    }
+    _trailsIndex++;
+  }
 
   _sphereInstanceBuffer.setData(_sphereInstanceData, GL::BufferUsage::DynamicDraw);
   _trailsInstanceBuffer.setData(_trailsInstanceData, GL::BufferUsage::DynamicDraw);
@@ -320,7 +347,9 @@ void ThreeDim::viewportEvent(ViewportEvent& event) {
 
 
 void ThreeDim::keyPressEvent(KeyEvent& event) {
-  if(event.key() == KeyEvent::Key::D) {
+         if(event.key() == KeyEvent::Key::C) {
+      atom->ChargeLoggingToggle();
+  } else if(event.key() == KeyEvent::Key::D) {
       atom->DtLoggingToggle();
   } else if(event.key() == KeyEvent::Key::E) {
       atom->EnergyLoggingToggle();

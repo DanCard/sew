@@ -1,5 +1,5 @@
 #include "particle.h"
-
+#include <atomic>
 #include <cassert>
 #include <cmath>   // For M_PI constant and other match functions such as round.
 #include <iostream>
@@ -34,6 +34,7 @@ Particle::Particle(int id, bool is_electron, Atom* a,
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
     tee << "\t\t initial_charge " << initial_charge << std::endl;
     num_allowed_escapes_for_energy_capping = (a_->num_particles / 2) + 2;  // Empirical formula.
+    std::cout << "\t\t\t max_dist_allow " << max_dist_allow << std::endl;
   }
 
 void Particle::logToBuffer(const std::string &s) {
@@ -201,8 +202,8 @@ void Particle::ConsiderLoggingToFile(int count) {
                          SFloat *dist_vector, SFloat dist_mag_2,
                          const SFloat *dist_unit_vector) {
     // Save some CPU processing time when we are in slow mode, by ignoring the insignificant magnetic force.
-    if (a_->dt <= kShortDt) return;
-    if (a_->short_dt == kShortDt && fast_fraction <= 0.1f && a_->count%32 != 0) return;
+    if (a_->dt <= kShortDtSlow) return;
+    if (a_->short_dt == kShortDtSlow && fast_fraction <= 0.1f && a_->count%32 != 0) return;
     // Constants for calculating magnetic force.
     // https://academic.mu.edu/phys/matthysd/web004/l0220.htm
     // Permeability of free space.  https://en.wikipedia.org/wiki/Vacuum_permeability
@@ -444,6 +445,8 @@ void Particle::ConsiderLoggingToFile(int count) {
     }
     // Calc position unit vector
     pos_magnitude = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1] + pos[2]*pos[2]);
+    dist_traveled_since_last_trail_update += pos_magnitude;
+    // atomic_update(&dist_traveled_since_last_trail_update, pos_magnitude);
     for (int i = 0; i < 3; ++i) {
       pos_unit_vec[i] = pos[i] / pos_magnitude;
     }
@@ -471,6 +474,14 @@ void Particle::ConsiderLoggingToFile(int count) {
     if (is_electron) {
       TeleportIfTooCloseToProton();
     }
+  }
+
+  void Particle::atomic_update(std::atomic<SFloat>* atomic1, SFloat magnitude) {
+    SFloat oldValue, newValue;
+    do {
+      oldValue = atomic1->load();
+      newValue = oldValue + magnitude;
+    } while (!atomic1->compare_exchange_weak(oldValue, newValue));
   }
 
 } // namespace

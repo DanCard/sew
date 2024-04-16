@@ -64,4 +64,6 @@ set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT 3dim)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)")
   add_compile_options(-g)
+  add_compile_options(-std=gnu++20)
 endif()
+add_compile_options(-std=gnu++20)

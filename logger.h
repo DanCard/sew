@@ -28,15 +28,16 @@ class Logger {
 
     explicit Logger(Atom *a);
 
+    bool charge_logging = false;
     bool dt_logging = false;
-    bool energy_logging = true;
+    bool energy_logging = false;
     bool fast_logging = false;
-    bool frame_draw_statistics_logging = false;
+    bool frame_draw_statistics_logging = true;
     bool iterations_logging = true;
     bool position_logging = false;
     bool percent_energy_dissipated_logging = true;
-    bool time_logging = true;
-    bool wall_clock_time_logging = true;
+    bool time_logging = false;
+    bool wall_clock_time_logging = false;
     bool velocity_logging = false;
 
     void DtLoggingToggle();
@@ -87,9 +88,11 @@ class Logger {
     // Log a particle and misc info.
     void LogStuff(Particle *w);
 
-  private:
+    void ChargeLoggingToggle();
+
+private:
     const std::chrono::_V2::system_clock::time_point start_time_;
-  
+
 };
 
 } // namespace

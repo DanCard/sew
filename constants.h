@@ -28,7 +28,7 @@ const SFloat kEMassMEv =    510998.95;  // eV / c^2  https://en.wikipedia.org/wi
 const SFloat kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wiki/Electronvolt#Mass
 const SFloat kEMassKg = 9.1093837015e-31;   // kg
 const SFloat kPMassKg = 1.67262192369e-27;  // kg
-const SFloat kBohrRadius = 5.29177210903e-11;  // Meters
+constexpr static const SFloat kBohrRadius = 5.29177210903e-11f;  // Meters
 const SFloat kBohrRadiusProton = kBohrRadius / 8;  // value = Something that works with this simulation.
 const SFloat kLithiumAtomSize = 152e-12;  // 152 picometers
 // The nuclear radius (r) can be estimated using the formula r = r0 * A^(1/3),
@@ -48,10 +48,11 @@ const int    kPFrequencySubDivisions =  32;
 const int    kEFrequencySubDivisions = 128;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
-const SFloat kShortDt     = 1 / ( kPFrequency * kPFrequencySubDivisions );
-const SFloat kShortDtFast = 1 / ( kEFrequency * kEFrequencySubDivisions );
+const SFloat kShortDtSlow = 1 / ( kPFrequency * kPFrequencySubDivisions );
+const SFloat kLongDtFast = 1 / ( kEFrequency * kEFrequencySubDivisions );
 // Use a long dt to make the simulation faster.
-const SFloat kLongDt  = 1 / ( kEFrequency * kEFrequencySubDivisions );  // Seconds
+const SFloat kLongDt  = kLongDtFast;   // Seconds
+const SFloat kShortDt = kShortDtSlow;  // Seconds
 // We change the simulation style when particle gets near the speed of light.
 // Instead of using dt, we just simulate the trajectory of the particle.
 // Needed because simulation creates huge errors when there are huge forces.

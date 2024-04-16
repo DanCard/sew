@@ -1,5 +1,6 @@
 #ifndef PARTICLE_H
 #define PARTICLE_H
+#include <atomic>
 #include <cassert>
 #include <cmath>   // For M_PI constant and other match functions such as round.
 #include <fstream>
@@ -120,6 +121,8 @@ public:
   TeeLogger tee_logger;
   std::ostream& tee;
   std::ofstream& log_file = tee_logger.get_file_stream();
+  // std::atomic<SFloat> dist_traveled_since_last_trail_update{0};
+  volatile SFloat dist_traveled_since_last_trail_update;
 
   explicit Particle(int id, bool is_electron, Atom* a,
                     SFloat mass_mev, SFloat mass_kg, SFloat avg_q, SFloat q_amplitude,
@@ -198,8 +201,8 @@ public:
   // With little or no space between particles, forces approach infinity.
   // If the simulation won't work because of large errors because of huge forces.
   void TeleportIfTooCloseToProton();
-
   void ApplyForces();
+  void atomic_update(std::atomic<SFloat>* atomic1, SFloat magnitude);
 };
 
 
