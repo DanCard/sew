@@ -15,26 +15,6 @@ namespace sew {
     a_(a), start_time_(std::chrono::_V2::system_clock::now()) {
   }
 
-  void Logger::ChargeLoggingToggle() {charge_logging = !charge_logging;  }
-  void Logger::DtLoggingToggle    () {dt_logging     = !dt_logging    ;  }
-  void Logger::EnergyLoggingToggle() {energy_logging = !energy_logging;  }
-  void Logger::FastLoggingToggle  () {fast_logging   = !fast_logging  ;  }
-  void Logger::FrameDrawStatisticsLoggingToggle() {
-    frame_draw_statistics_logging = !frame_draw_statistics_logging;
-  }
-  void Logger::IterationsLoggingToggle() {
-    iterations_logging = !iterations_logging;
-  }
-  void Logger::PositionLoggingToggle() {position_logging = !position_logging; }
-  void Logger::PercentEnergyDissipatedLoggingToggle() {
-    percent_energy_dissipated_logging = !percent_energy_dissipated_logging;
-  }
-  void Logger::VelocityLoggingToggle() {velocity_logging = !velocity_logging; }
-  void Logger::TimeLoggingToggle    () {time_logging     = !time_logging    ; }
-  void Logger::WallClockLoggingToggle() {
-    wall_clock_time_logging = !wall_clock_time_logging;
-  }
-
   // A bit of a mess because we have particle data and particles(system) data that we are logging.
   std::string Logger::FormatLogLine(const Particle* w, bool to_file) const {
     Particle* par_closest = w->par_closest;
@@ -47,7 +27,7 @@ namespace sew {
       << std::scientific << std::setprecision(3)
       << "  dis"  << std::setw(10) << (w->is_electron ? w->dist_mag_closest : w->pos_magnitude)
       << "  vel " << std::setw(10) << w->vel_mag
-      << (velocity_logging || to_file ? Log3dArray(w->vel, "v") : "")
+      << (velocity_logging ? Log3dArray(w->vel, "v") : "")
       << (w->energy_dissipated ? " *" : "  ") << std::fixed << std::setprecision(1)
       << "d⋅v " << std::setw( 4) << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
       << std::scientific << std::setprecision(2)
@@ -71,7 +51,7 @@ namespace sew {
    // << Log3dArray(magnet_fs, "tB"  )
    // << "  B "   << sqrt(magnet_fs[0]*magnet_fs[0] + magnet_fs[1]*magnet_fs[1] + magnet_fs[2]*magnet_fs[2])
    // << Log3dArray(acceleration, "a")
-   // << " chng"  << std::setw(10) << std::setprecision(3) << pos_change_magnitude
+      << " chng"  << std::setw(6) << std::setprecision(0) << w->pos_magnitude
    // << Log3dArray(pos_change, "chng") << std::setprecision(1)
       << (position_logging ? Log3dArray(w->pos, "pos") : "");
    // << " min pos change " << min_pos_change_desired
@@ -83,7 +63,7 @@ namespace sew {
       << static_cast<int>(std::round((charge_of_closest / par_closest->q_amplitude) * 100.0f)) << '%';
     }
    // << " inv"   << std::setw(12) << inverse_exponential
-    if (energy_logging || to_file) {
+    if (energy_logging) {
       log_line << std::scientific << std::setprecision(2)
         // P energy goes negative, that is why width is larger.
         << "  pe" << std::setw(10) << a_->potential_energy_average
@@ -102,7 +82,7 @@ namespace sew {
     if (iterations_logging) {
       log_line << " it" << std::setw(5) << a_->iter;
     }
-    if (wall_clock_time_logging || to_file) {
+    if (wall_clock_time_logging) {
       auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(
               std::chrono::_V2::system_clock::now() - start_time_);
       log_line << " mi " << std::setw(6) << elapsed_time.count();
@@ -110,6 +90,7 @@ namespace sew {
     if (time_logging) {
       log_line << " t " << std::scientific << std::setprecision(3) << std::setw(9) << a_->time_;
     }
+    log_line << " d t s l t u " << std::setprecision(1) << w->dist_traveled_since_last_trail_update;
     /*
     for (int i=0; i<num_particles_; ++i) {
       if (i == id || i == par_closest_id) continue;
@@ -131,9 +112,9 @@ namespace sew {
                ;
     if (do_log || (w->id == w_to_log_id &&
         std::chrono::duration_cast<std::chrono::milliseconds>(
-        now - last_log_time).count() > 1200)) {
+        now - last_log_time).count() > 800)) {
       SetColorForConsole(w->color[0], w->color[1], w->color[2]);
-      std::cout << std::endl;
+      // std::cout << std::endl;
       std::string log_line_str = FormatLogLine(w, false);
       a_->n_times_per_screen_log_MoveParticles_not_compl_before_next_frame_draw_event = 0;
       a_->n_times_per_screen_log_MoveParticles_completed_before_next_frame_draw_event = 0;
@@ -147,4 +128,25 @@ namespace sew {
     // Didn't log to screen so consider logging to just file.
     w->ConsiderLoggingToFile(a_->count);
   }
+
+  void Logger::ChargeLoggingToggle() {charge_logging = !charge_logging;  }
+  void Logger::DtLoggingToggle    () {dt_logging     = !dt_logging    ;  }
+  void Logger::EnergyLoggingToggle() {energy_logging = !energy_logging;  }
+  void Logger::FastLoggingToggle  () {fast_logging   = !fast_logging  ;  }
+  void Logger::FrameDrawStatisticsLoggingToggle() {
+    frame_draw_statistics_logging = !frame_draw_statistics_logging;
+  }
+  void Logger::IterationsLoggingToggle() {
+    iterations_logging = !iterations_logging;
+  }
+  void Logger::PositionLoggingToggle() {position_logging = !position_logging; }
+  void Logger::PercentEnergyDissipatedLoggingToggle() {
+    percent_energy_dissipated_logging = !percent_energy_dissipated_logging;
+  }
+  void Logger::VelocityLoggingToggle() {velocity_logging = !velocity_logging; }
+  void Logger::TimeLoggingToggle    () {time_logging     = !time_logging    ; }
+  void Logger::WallClockLoggingToggle() {
+    wall_clock_time_logging = !wall_clock_time_logging;
+  }
+
 } // namespace

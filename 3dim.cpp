@@ -307,17 +307,18 @@ void ThreeDim::drawSpheres() {
   for(std::size_t i = 0; i < numSpheres; ++i) {
     auto s_pos = _spherePositions[i];
     _sphereInstanceData[i].transformationMatrix.translation() = s_pos;
+    /*
     if (i==0)
       std::cout << " tr "  << std::setprecision(0)
                 << atom->pars[i]->dist_traveled_since_last_trail_update
                 << " ";
+    */
     if (atom->pars[i]->dist_traveled_since_last_trail_update >
         sew::Atom::kMaxPosChangeDesiredPerFrame) {
       atom->pars[i]->dist_traveled_since_last_trail_update = 0;
       _trailsInstanceData[_trailsIndex].transformationMatrix.translation() = s_pos;
       atom->pars[i]->dist_traveled_since_last_trail_update = 0;
-      if (i==0)
-      std::cout << " * ";
+      // if (i==0)      std::cout << " * ";
     }
     _trailsIndex++;
   }

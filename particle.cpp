@@ -28,7 +28,7 @@ Particle::Particle(int id, bool is_electron, Atom* a,
           tee_logger(is_electron ? "e" + std::to_string(id) + ".log"
                                  : "p" + std::to_string(id) + ".log"),
                      tee(tee_logger.get_stream()) {
-    log_count = 1;
+    log_count = 3;
     std::cout << "\t" << (is_electron ? "electron" : "proton") << " " << id
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
@@ -57,6 +57,8 @@ void Particle::log_prev_log_lines(int max_lines_to_log) {
 
 
 void Particle::ConsiderLoggingToFile(int count) {
+    bool dist_reset = prev_dist_traveled_since_last_trail_update > dist_traveled_since_last_trail_update;
+
     SFloat danger_speed = max_speed_allow / 2;
 
     bool particles_are_close      = dist_mag_closest < (kCloseToTrouble * 2);
@@ -79,12 +81,15 @@ void Particle::ConsiderLoggingToFile(int count) {
       || (count%(ll* 2) == 0 && fast_fraction < 0.0002f && particles_are_close_very)
       || (count% ll     == 0 && vel_mag  > danger_speed && particles_are_close_very)
       || fast_fraction_changed_significantly
+      || dist_reset
     ) {
       std::string log_source = " ?";
       if (log_count > 0) {
         log_source = " L";
       } else if (fast_fraction_changed_significantly) {
         log_source = " F";
+      } else if (dist_reset) {
+        log_source = " D";
       } else {
         for (int i = 16; i > 0; i /= 2) {
           if (count % (ll*i) == 0) {
@@ -99,6 +104,7 @@ void Particle::ConsiderLoggingToFile(int count) {
       log_count--;
       logToBuffer(log_line_str);
     }
+    prev_dist_traveled_since_last_trail_update = dist_traveled_since_last_trail_update;
   }
 
   void Particle::HandleEscape() {
@@ -429,10 +435,8 @@ void Particle::ConsiderLoggingToFile(int count) {
     vel_mag2 = vel[0]*vel[0] + vel[1]*vel[1] + vel[2]*vel[2];
     vel_mag  = std::sqrt(vel_mag2);
     for (int i = 0; i < 3; ++i) {
-      pos_change[i]  = vel[i] * a_->dt;
-      if (!kHoldingProtonSteady || is_electron) {
-        pos        [i] += pos_change[i];
-      }
+      pos_change   [i]  = vel[i] * a_->dt;
+      pos          [i] += pos_change[i];
       vel_unit_vec [i]  = vel[i] / vel_mag;
       dist_unit_vec[i]  = dist_closest[i] / dist_mag_closest;
     }

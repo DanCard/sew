@@ -122,7 +122,8 @@ public:
   std::ostream& tee;
   std::ofstream& log_file = tee_logger.get_file_stream();
   // std::atomic<SFloat> dist_traveled_since_last_trail_update{0};
-  volatile SFloat dist_traveled_since_last_trail_update;
+  volatile SFloat dist_traveled_since_last_trail_update = 0;
+  SFloat     prev_dist_traveled_since_last_trail_update = 0;
 
   explicit Particle(int id, bool is_electron, Atom* a,
                     SFloat mass_mev, SFloat mass_kg, SFloat avg_q, SFloat q_amplitude,

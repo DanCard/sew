@@ -64,7 +64,7 @@ const SFloat kMaxSpeedProton = kMaxSpeedElectron * (kEMassMEv / kPMassMEv);  // 
 // Causes short duration dt , logging to increase, and simulation speed to slow down.
 const SFloat kCloseToTrouble = 2.3e-13;
 const SFloat kForceTooHigh = 0.3;  // 0.3 from trial and error.
-const bool   kHoldingProtonSteady = false;  // Don't move the proton(s).
+// const bool   kHoldingProtonSteady = false;  // Don't move the proton(s).
 
 } // namespace
 

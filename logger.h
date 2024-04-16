@@ -29,9 +29,9 @@ class Logger {
     explicit Logger(Atom *a);
 
     bool charge_logging = false;
-    bool dt_logging = false;
+    bool dt_logging = true;
     bool energy_logging = false;
-    bool fast_logging = false;
+    bool fast_logging = true;
     bool frame_draw_statistics_logging = true;
     bool iterations_logging = true;
     bool position_logging = false;
