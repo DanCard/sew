@@ -27,7 +27,7 @@ Particle::Particle(int id, bool is_electron, Atom* a,
           tee_logger(is_electron ? "e" + std::to_string(id) + ".log"
                                  : "p" + std::to_string(id) + ".log"),
                      tee(tee_logger.get_stream()) {
-    log_count = 3;
+    log_count = 1;
     std::cout << "\t" << (is_electron ? "electron" : "proton") << " " << id
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;

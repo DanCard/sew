@@ -302,17 +302,16 @@ void ThreeDim::drawEvent() {
 }
 
 void ThreeDim::drawSpheres() {
-  _trailsIndex  = _trailsIndex % numTrails;
-  // Loop through all the spheres and update their transformation matrix
+  _trailsIndex = _trailsIndex % numTrails;
+  // Loop through all the spheres and update transformation matrix
   for(std::size_t i = 0; i < numSpheres; ++i) {
     auto s_pos = _spherePositions[i];
     _sphereInstanceData[i].transformationMatrix.translation() = s_pos;
+    // When there is significant movement then update particle trail.
     if (atom->pars[i]->dist_traveled_since_last_trail_update >
-        sew::Atom::kMaxPosChangeDesiredPerFrame) {
+        sew::Atom::kMaxPosChangeDesiredPerFrame/2) {
       atom->pars[i]->dist_traveled_since_last_trail_update = 0;
       _trailsInstanceData[_trailsIndex].transformationMatrix.translation() = s_pos;
-      atom->pars[i]->dist_traveled_since_last_trail_update = 0;
-      // if (i==0)      std::cout << " * ";
     }
     _trailsIndex++;
   }

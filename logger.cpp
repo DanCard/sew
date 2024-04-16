@@ -109,7 +109,7 @@ namespace sew {
 
   // Log a particle and misc info.
   void Logger::LogStuff(Particle* w) {
-    static int milliseconds_to_wait_before_logging = 500;
+    static int milliseconds_to_wait_before_logging = 700;
     static std::chrono::_V2::system_clock::time_point last_log_time;
     /*
     bool dist_reset = w->prev_dist_traveled_since_last_trail_update
@@ -135,7 +135,7 @@ namespace sew {
       w->log_count--;
       w->was_energy_dissipated_since_last_logged_to_screen = false;
       w->logToBuffer(log_line_str);
-      if (milliseconds_to_wait_before_logging < 1200)
+      if (milliseconds_to_wait_before_logging < 1500)
         milliseconds_to_wait_before_logging += 50;
       return;
     }

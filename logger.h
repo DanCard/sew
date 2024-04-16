@@ -39,7 +39,7 @@ class Logger {
     bool percent_energy_dissipated_logging = false;
     bool time_logging = false;
     bool wall_clock_time_logging = false;
-    bool velocity_logging = false;
+    bool velocity_logging = true;
     bool velocity_component_logging = false;
 
     void DtLoggingToggle();
