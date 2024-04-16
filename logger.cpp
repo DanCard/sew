@@ -103,6 +103,8 @@ namespace sew {
   // Log a particle and misc info.
   void Logger::LogStuff(Particle* w) {
     static std::chrono::_V2::system_clock::time_point last_log_time;
+    bool dist_reset = w->prev_dist_traveled_since_last_trail_update
+                        >  w->dist_traveled_since_last_trail_update;
 
     // Log based on time interval to console.
     auto now = std::chrono::system_clock::now();
@@ -110,7 +112,9 @@ namespace sew {
      //        || (w->energy_dissipated && !w->energy_dissipated_prev)
      //        ||  w->flipped_dis_vel_dot_prod
                ;
-    if (do_log || (w->id == w_to_log_id &&
+    if (do_log
+     || (dist_reset && w->id == 0)
+     || (w->id == w_to_log_id &&
         std::chrono::duration_cast<std::chrono::milliseconds>(
         now - last_log_time).count() > 800)) {
       SetColorForConsole(w->color[0], w->color[1], w->color[2]);
