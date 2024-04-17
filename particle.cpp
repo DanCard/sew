@@ -124,7 +124,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     for (SFloat & v : vel) v = 0;
     log_count = 1;  // Force logging around this event.
     if (a_->total_energy < a_->total_energy_cap && num_allowed_escapes_for_energy_capping > 0) {
-      a_->total_energy_cap = a_->total_energy * 1.5f;
+      a_->total_energy_cap = a_->total_energy * (1 + ((SFloat)a_->num_particles / 4.0f));
       tee << "  total energy cap set to " << a_->total_energy_cap;
       num_allowed_escapes_for_energy_capping -= 1;
     }

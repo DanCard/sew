@@ -49,7 +49,9 @@ const int    kEFrequencySubDivisions = 128;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.
 const SFloat kShortDtSlow = 1 / ( kPFrequency * kPFrequencySubDivisions );
+// const SFloat kLongDtFast = 1 / kPFrequency;
 const SFloat kLongDtFast = 1 / ( kEFrequency * kEFrequencySubDivisions );
+
 // Use a long dt to make the simulation faster.
 const SFloat kLongDt  = kLongDtFast;   // Seconds
 const SFloat kShortDt = kShortDtSlow;  // Seconds
