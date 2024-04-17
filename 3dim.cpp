@@ -320,7 +320,7 @@ void ThreeDim::drawSpheres() {
                                                   Matrix4::scaling(Vector3{radius});
     // When there is significant movement then update particle trail.
     if (atom->pars[i]->dist_traveled_since_last_trail_update >
-        sew::Atom::kMaxPosChangeDesiredPerFrame/2) {
+        sew::Atom::kMaxPosChangeDesiredPerFrame/3) {
       atom->pars[i]->dist_traveled_since_last_trail_update = 0;
       _trailsInstanceData[_trailsIndex].transformationMatrix = Matrix4::translation(s_pos) *
                                                                Matrix4::scaling(Vector3{.01f});

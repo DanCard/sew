@@ -31,11 +31,17 @@ Atom::Atom(int numParticles) :
     const SFloat nucleus_initial_radius = kBohrRadiusProton * (num_particles / 2);
     const SFloat electron_initial_radius = nucleus_initial_radius * 3;
     std::cout << "\t\t\t\t nucleus initial radius " << nucleus_initial_radius << "  electron initial radius " << electron_initial_radius << std::endl;
-    int divider;  // Prefer bright colors, but with many particles becomes indistinguishable.
+    /*
+    int divider;
          if (num_particles <= 2)  divider = 1;
-    else if (num_particles <= 4)  divider = 3;
-    else if (num_particles <= 6)  divider = 4;
+    else if (num_particles <= 4)  divider = 2;
+    else if (num_particles <= 6)  divider = 3;
+    else if (num_particles <= 8)  divider = 4;
+    else if (num_particles <=10)  divider = 5;
+    else if (num_particles <=12)  divider = 6;
     else                          divider = 8;  // With more particles don't brighten as much.
+    */
+    int divider = num_particles / 2;    // Prefer bright colors, but with many particles becomes indistinguishable.
     // Create the subatomic particles.
     for (int i = 0; i < numParticles; ++i) {
       Particle* p;
@@ -46,25 +52,27 @@ Atom::Atom(int numParticles) :
         // Prefer bright colors over dark colors.
         // p->color[1] =  51 + (std::rand() % 155);
         p->color[0] = std::rand() % 256;
-        p->color[1] = std::rand() % 256;
-        p->color[2] = std::rand() % 245;
+        p->color[1] = std::rand() % 225;
+        p->color[2] = std::rand() % 220;
         if (i == 0) {
-          p->color[0] = std::max(255, p->color[0]);
-          p->color[1] = std::max(120, p->color[1]);
-          p->color[2] = std::max(120, p->color[2]);
+          p->color[0] = std::max((unsigned char)255, p->color[0]);
+          p->color[1] = std::max((unsigned char)160, p->color[1]);
+          p->color[2] = std::max((unsigned char)150, p->color[2]);
         }
         for (int j = 0; j < 3; ++j)
             p->pos[j] = ((float)(std::rand() / (RAND_MAX + 1.0)) - 0.5f) * electron_initial_radius;
       } else {
         pars[i] = new Proton(i, this, logger, nucleus_initial_radius * 2);
         p = pars[i];
-        p->color[0] =   0 + (std::rand() % 210);
-        p->color[1] =   0 + (std::rand() % 240);
-        p->color[2] = 151 + (std::rand() % 105);
+        p->color[0] =   0 + (std::rand() % 255);
+        p->color[1] =   0 + (std::rand() % 255);
+        p->color[2] =   0 + (std::rand() % 255);
         p->vel[1] = 1e4;
-        if (i == 1) {
-          p->pos[0] = 0;
+        /*
+        if (i == 4) {
+          p->color[2] = 255;
         }
+        */
         for (int j = 0; j < 3; ++j)
             p->pos[j] = ((float)(std::rand() / (RAND_MAX + 1.0)) - 0.5f) * nucleus_initial_radius;
       }
