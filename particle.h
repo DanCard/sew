@@ -26,26 +26,25 @@ public:
   const bool is_electron;  // Only used for logging.
   Atom* a_;                // The atom this particle belongs to.
 
-  const SFloat mass_mev;
+  const double mass_mev;
   const SFloat mass_kg;
   // mass = energy / c^2
   // https://en.wikipedia.org/wiki/Planck_relation
   // E = h * f
   // f = E / h
-  const SFloat frequency = mass_mev / kHEv;
+  const double frequency = mass_mev / kHEv;
   const SFloat avg_q;         // Average charge. -e for electron. +e for proton.
   // Have the electron charge start random between 0 and +-2e.
   // Since charge is based on a sine wave and will oscillate between 0 and +-2e,
   // need a random starting point between 0 and 2 pi
   const SFloat q_amplitude;   // Amplitude of charge.  Set to e = kQ
 
-  // See ChargeSinusoidal for how this is used:
   // return avg_q + (q_amplitude * sin((frequency * time_ * 2 * M_PI) + initial_charge));
   // Want paired particles to be at opposite ends of the sine wave.
   // In other words to be a half cycle away.
   // This causes one electron to be at -2e charge, while the other is at 0 charge.
   const SFloat initial_charge;
-  SFloat freq_charge;
+  volatile SFloat freq_charge;
 
   SFloat pos[3] = {0, 0, 0};   // Position
   SFloat pos_magnitude;        // Set for proton.
@@ -125,7 +124,7 @@ public:
   volatile SFloat dist_traveled_since_last_trail_update = 0;
 
   explicit Particle(int id, bool is_electron, Atom* a,
-                    SFloat mass_mev, SFloat mass_kg, SFloat avg_q, SFloat q_amplitude,
+                    double mass_mev, double mass_kg, SFloat avg_q, SFloat q_amplitude,
                     SFloat max_dist_allowed, SFloat max_speed_allowed,
                     Logger *logger
                     );

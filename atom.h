@@ -39,7 +39,8 @@ public:
   // Delta time in seconds.
   // SFloat dt = kShortDtSlow;
   SFloat dt = kLongDtFast;
-  SFloat time_ = 0;
+  double time_ = 0;     // We add tiny quantities of dt to this.  Float doesn't do the job.
+                        // Needs to be double.  Float is only good for 7 digits of accuracy.
   int    count = 0;         // Invocation count of moving particles.
   SFloat total_potential_energy = 0;
   SFloat total_kinetic_energy = 0;
@@ -75,17 +76,12 @@ public:
   void PercentEnergyDissipatedToggle();
   void FastModeToggle();
   void SlowMode();
-  bool IsSlowMode() const;
   void TimeLoggingToggle();
   void WallClockLogToggle();
-
-    void ChargeLoggingToggle();
-
-    void DvModeToggle();
-
-    void VelocityComponentsLogToggle();
-
-    void TrailLoggingToggle();
+  void ChargeLoggingToggle();
+  void DvModeToggle();
+  void VelocityComponentsLogToggle();
+  void TrailLoggingToggle();
 
 private:
   void CalcAveragePotentialEnergy();

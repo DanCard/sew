@@ -29,16 +29,16 @@ class Logger {
     explicit Logger(Atom *a);
 
     bool charge_logging = true;
-    bool dt_logging = false;
+    bool dt_logging = true;
     bool energy_logging = false;
     bool fast_logging = false;
     bool dv_logging = true;
-    bool frame_draw_stats_logging = true;
+    bool frame_draw_stats_logging = false;
     bool iterations_logging = false;
     bool trail_logging = false;
     bool position_logging = true;
     bool percent_energy_dissipated_logging = false;
-    bool time_logging = false;
+    bool time_logging = true;
     bool wall_clock_time_logging = false;
     bool velocity_logging = true;
     bool velocity_component_logging = true;

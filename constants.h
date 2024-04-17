@@ -22,12 +22,12 @@ const SFloat kCoulomb = 8987551787.3681764;       // N * m^2 / C^2
                                     // https://en.wikipedia.org/wiki/Electron
 const SFloat kQ = 1.602176634e-19;  // Charge of a particle in Coulombs
              // Planck's constant eV*s  https://en.wikipedia.org/wiki/Planck_constant
-const SFloat kHEv = 4.135667696E-15;
+const double kHEv = 4.135667696E-15;
 // const SFloat kH = 6.62607015E-34;    // Planck's constant m^2 * kg / s
-const SFloat kEMassMEv =    510998.95;  // eV / c^2  https://en.wikipedia.org/wiki/Electron
-const SFloat kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wiki/Electronvolt#Mass
-const SFloat kEMassKg = 9.1093837015e-31;   // kg
-const SFloat kPMassKg = 1.67262192369e-27;  // kg
+const double kEMassMEv =    510998.95;  // eV / c^2  https://en.wikipedia.org/wiki/Electron
+const double kPMassMEv = 938272088.16;  // eV / c^2  https://en.wikipedia.org/wiki/Electronvolt#Mass
+const double kEMassKg = 9.1093837015e-31;   // kg
+const double kPMassKg = 1.67262192369e-27;  // kg
 constexpr static const SFloat kBohrRadius = 5.29177210903e-11f;  // Meters
 const SFloat kBohrRadiusProton = kBohrRadius / 8;  // value = Something that works with this simulation.
 const SFloat kLithiumAtomSize = 152e-12;  // 152 picometers
@@ -38,10 +38,10 @@ const SFloat kLithiumAtomSize = 152e-12;  // 152 picometers
 
 // const SFloat kBohrMagneton = kQ * kH / (4 * M_PI * kEMassKg); // https://en.wikipedia.org/wiki/Bohr_magneton
 // const SFloat kProtonMagneticMoment = 1.41060679736e-26;  // J/T . https://en.wikipedia.org/wiki/Proton_magnetic_moment
-const SFloat kEFrequency = kEMassMEv / kHEv;
-const SFloat kPFrequency = kPMassMEv / kHEv;
-const SFloat kEPeriod = kHEv / kEMassMEv;
-const SFloat kPPeriod = kHEv / kPMassMEv;
+const double kEFrequency = kEMassMEv / kHEv;
+const double kPFrequency = kPMassMEv / kHEv;
+const double kEPeriod = kHEv / kEMassMEv;
+const double kPPeriod = kHEv / kPMassMEv;
 const int    kMaxParticles = 16;
 // For increased speed avoid lowering.  Instead increase threading.
 const int    kPFrequencySubDivisions =  32;

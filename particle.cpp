@@ -11,7 +11,7 @@
 namespace sew {
 
 Particle::Particle(int id, bool is_electron, Atom* a,
-                    SFloat mass_mev, SFloat mass_kg, SFloat avg_q, SFloat q_amplitude,
+                    double mass_mev, double mass_kg, SFloat avg_q, SFloat q_amplitude,
                     SFloat max_dist_allowed, SFloat max_speed_allowed,
                     Logger *logger
                     ) :
@@ -27,7 +27,7 @@ Particle::Particle(int id, bool is_electron, Atom* a,
           tee_logger(is_electron ? "e" + std::to_string(id) + ".log"
                                  : "p" + std::to_string(id) + ".log"),
                      tee(tee_logger.get_stream()) {
-    log_count = 1;
+    log_count = 2;
     std::cout << "\t" << (is_electron ? "electron" : "proton") << " " << id
       << "\t frequency " << frequency << "  "
               << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
@@ -143,26 +143,28 @@ void Particle::ConsiderLoggingToFile(int count) {
   }
 
 
-  // Get the charge that is based on freq and thus time.
-  SFloat Particle::ChargeSinusoidal() const {
     // if dt > 0.25 / frequency, then make charge constant, because
     // can't simulate sinusoidal charge when dt is much bigger than wave period.
+    /*
     if (a_->dt > (0.25f/frequency)) {
       return avg_q;
     }
-    /*
     if (!is_electron) {
       return avg_q;
     }
     */
     // return avg_q;
+
+
+  // Get the charge that is based on freq and thus time.
+  SFloat Particle::ChargeSinusoidal() const {
     // Need to calculate where the particle is in its frequency.
     // Theory is that charge varies between 0 and -2e each time period = 1 / frequency.
     // Frequency is kEFrequency or kPFrequency.
     // 
     // Charge = e + e * sin(2 * pi * frequency * time + initial_charge)
     return avg_q +
-           q_amplitude * std::sin(frequency * a_->time_ * 2.0f * M_PIf + initial_charge);
+           q_amplitude * std::sin((frequency * a_->time_ * 2.0 * M_PI) + initial_charge);
   }
 
   void Particle::InitVarsToCalcForces() {
@@ -181,6 +183,10 @@ void Particle::ConsiderLoggingToFile(int count) {
       dist_calcs_done[i] = false;
     }
     freq_charge = ChargeSinusoidal();
+    /*
+    if (id == 0) std::cout << " 0 " << freq_charge;
+    else         std::cout << " 1 " << freq_charge;
+    */
   }
 
   // Calculate the magnetic force caused by:
@@ -321,12 +327,12 @@ void Particle::ConsiderLoggingToFile(int count) {
   }
 
 
-  // When forces are very high we should slow down delta time (dt) to make calculations more accurate.
+  // When forces are very high we should slow down delta time (dt) to make calculations
+  // more accurate.
   void Particle::NewDt(SFloat * fast_fraction_ptr) {
     // Simulation will slow down alot below this distance.  Will make simulation more accurate.
-    const SFloat kSmallDtDistance = kCloseToTrouble * 3
-            ;
-    // Simulation will slow down when particles are closer than this.  Will make simulation more accurate.
+    const SFloat kSmallDtDistance = kCloseToTrouble * 3;
+    // Simulation will slow down when particles are closer than this.
     const SFloat safe_distance = kBohrRadius / 2;
     // If we are inside the trouble zone that slowdown should be max.
     // In other words dt should be shortest time.
@@ -370,6 +376,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     }
   }
 
+
   // With little or no space between particles, forces approach infinity.
   // If the simulation won't work because of large errors because of huge forces.
   void Particle::TeleportIfTooCloseToProton() {
@@ -383,15 +390,15 @@ void Particle::ConsiderLoggingToFile(int count) {
     // Force needs to be in the same direction as velocity.
     // If not then we don't to worry about particles heading in opposite directions.
     // Need unit vector for velocity and force, then do dot product.
-    Particle* close = par_closest;
+    Particle* close_w = par_closest;
     // If the vectors are pointing in the same direction (aligned), their dot product is 1.
     // If they are perpendicular, it's 0. If they are pointing in opposite directions, it's -1.
     // Since we are using distance as a proxy for force, sign is reversed.
     bool force_same_dir_as_v = dist_vel_dot_prod < -0.75f;    // -0.75 = guess
     if (!force_same_dir_as_v) return;
 
-    close->log_prev_log_lines(1);
-           log_prev_log_lines(1);
+    close_w->log_prev_log_lines(1);
+             log_prev_log_lines(1);
     tee << "\t Teleporting because force too high. " << "e" << id
         << "  distance velocity dot product " << dist_vel_dot_prod
         << "  force magnitude " << force_magnitude
@@ -404,23 +411,23 @@ void Particle::ConsiderLoggingToFile(int count) {
                               << " y " << dist_unit_vec[1]
                               << " z " << dist_unit_vec[2] << std::endl;
     */
-    tee << "  Dist " << dist_mag_closest << " x " << dist_closest[0] << " y " << dist_closest[1] << " z " << dist_closest[2]
-        << "  Teleporting to other side of "
-        << (close->is_electron ? "electron" : "proton")
-        << ".  Position " << pos[0] << " " << pos[1] << " " << pos[2]
+    tee << "\t Dist mag closet " << dist_mag_closest
+        << " x " << dist_closest[0] << " y " << dist_closest[1] << " z " << dist_closest[2]
+        << "  current pos " << pos[0] << " " << pos[1] << " " << pos[2]
         << std::endl;
     // Teleport the particle to other side of the close by particle.
     for (int i = 0; i < 3; ++i) {
       pos[i] += -2 * dist_closest[i];
     }
-    tee << "\t Teleported to " << pos[0] << " " << pos[1] << " " << pos[2]
-        << "  proton pos x " << close->pos[0] << " y " << close->pos[1] << " z " << close->pos[2]
+    tee << "\t Teleporting to other side of " << (close_w->is_electron ? "electron" : "proton")
+        << "\t new pos " << pos[0] << " " << pos[1] << " " << pos[2]
+        << "  proton pos x " << close_w->pos[0] << " y " << close_w->pos[1] << " z " << close_w->pos[2]
         << std::endl;
     v_when_teleported = vel_mag;
     log_count = 1;               // Force extra logging after this event.
-    close->log_file << "\t\t\t" << "e" << id << " teleported "  << std::endl;
+    close_w->log_file << "\t\t\t" << "e" << id << " teleported "  << std::endl;
     // if (num_particles_ > 2)
-    close->log_count = 1;          // Force extra logging for other particle.
+    close_w->log_count = 1;          // Force extra logging for other particle.
   }
 
   void Particle::ApplyForces() {

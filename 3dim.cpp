@@ -184,9 +184,9 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
     for (int j=0; j<3; j++) {
       _spherePositions[i][j] = static_cast<float>(p->pos[j] / kScale);
     }
-    float sphere_radius = (p->is_electron ? 1.0f : 1.5f) * _sphereRadius;
+    // float sphere_radius = (p->is_electron ? 1.0f : 1.5f) * _sphereRadius;
     _sphereInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[i]) *
-                                                  Matrix4::scaling(Vector3{sphere_radius}) * 3;
+                                                  Matrix4::scaling(Vector3{_sphereRadius}) * 3;
     _sphereInstanceData[i].normalMatrix = _sphereInstanceData[i].transformationMatrix.normalMatrix();
   }
   Debug{} << " sphere transformation Matrix:" << _sphereInstanceData[0].transformationMatrix;
@@ -306,7 +306,18 @@ void ThreeDim::drawSpheres() {
   // Loop through all the spheres and update transformation matrix
   for(std::size_t i = 0; i < numSpheres; ++i) {
     auto s_pos = _spherePositions[i];
-    _sphereInstanceData[i].transformationMatrix.translation() = s_pos;
+    //_sphereInstanceData[i].transformationMatrix.translation() = s_pos;
+
+    // What do we want the radius to be?
+    // Larger when charge is closer to 2e and smaller when charge is closer to 0e.
+    // 0.2f at zero charge and 2x at 2e charge?  Average is 1.0f.
+    // Could make it simple and zero at 0 charge.
+    // Average charge is kQ = 1.602176634e-19 Coulombs.
+    float charge = atom->pars[i]->freq_charge;
+    float radius = (std::abs(charge / sew::kQ) / 16) + 0.05f;
+    // std::cout << "charge: " << charge << " radius: " << radius << std::endl;
+    _sphereInstanceData[i].transformationMatrix = Matrix4::translation(s_pos) *
+                                                  Matrix4::scaling(Vector3{radius});
     // When there is significant movement then update particle trail.
     if (atom->pars[i]->dist_traveled_since_last_trail_update >
         sew::Atom::kMaxPosChangeDesiredPerFrame/2) {

@@ -2,13 +2,14 @@
 
 #include <cstdlib> // For rand()
 #include <iostream>
-#include <thread>
 #include <vector>
 
 #include "logger.h"
 #include "particle.h"
+#ifdef use_thread_pool
+#include <thread>
 #include "thread_pool.h"
-
+#endif
 
 namespace sew {
 
@@ -18,24 +19,23 @@ Atom::Atom(int numParticles) :
     std::cout << "\t Electron period: " << kEPeriod << " proton period: " << kPPeriod << std::endl;
     logger = new sew::Logger(this);
     std::cout << "  kMaxPosChangeDesiredPerFrame " << kMaxPosChangeDesiredPerFrame
-      << "  kBhorRadius " << kBohrRadius << "  kBohrRadiusProton " << kBohrRadiusProton
+      << "  kBohrRadius " << kBohrRadius << "  kBohrRadiusProton " << kBohrRadiusProton
       << "  kLithiumAtomSize " << kLithiumAtomSize
       << std::endl;
     std::cout << "  max speed electron " << kMaxSpeedElectron
       << "  kPFrequencySubDivisions " << kPFrequencySubDivisions
       << "  kEFrequencySubDivisions " << kEFrequencySubDivisions
-              << "\t kShortDt " << kShortDtSlow << "  kLongDt " << kLongDt << std::endl;
+              << "  kShortDtSlow " << kShortDtSlow << " kLongDt " << kLongDt << std::endl;
     std::cout << "\t\t\t\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
     const SFloat nucleus_initial_radius = kBohrRadiusProton * (num_particles / 2);
-    const SFloat electron_initial_radius = nucleus_initial_radius * 4;
+    const SFloat electron_initial_radius = nucleus_initial_radius * 3.5;
     std::cout << "\t\t\t\t nucleus initial radius " << nucleus_initial_radius << "  electron initial radius " << electron_initial_radius << std::endl;
     int divider;  // Prefer bright colors, but with many particles becomes indistinguishable.
          if (num_particles <= 2)  divider = 1;
     else if (num_particles <= 4)  divider = 3;
     else if (num_particles <= 6)  divider = 4;
     else                          divider = 8;  // With more particles don't brighten as much.
-    bool is_electron = true;
     // Create the subatomic particles.
     for (int i = 0; i < numParticles; ++i) {
       Particle* p;
@@ -49,8 +49,6 @@ Atom::Atom(int numParticles) :
         p->color[1] = std::rand() % 256;
         p->color[2] = std::rand() % 245;
         if (i == 0) {
-          // p->vel[1] = -1e4;
-          // p->pos[0] = -p->max_dist_allow * 0.95f;
           p->color[0] = 255;
           p->color[1] = 120;
           p->color[2] = 120;
@@ -58,7 +56,6 @@ Atom::Atom(int numParticles) :
         for (int j = 0; j < 3; ++j)
             p->pos[j] = ((float)(std::rand() / (RAND_MAX + 1.0)) - 0.5f) * electron_initial_radius;
       } else {
-        is_electron = false;
         pars[i] = new Proton(i, this, logger, nucleus_initial_radius * 2);
         p = pars[i];
         p->color[0] =   0 + (std::rand() % 210);
@@ -73,9 +70,7 @@ Atom::Atom(int numParticles) :
       }
       std::cout << "\t\t color " << int(p->color[0]) << " " << int(p->color[1])
                 << " " << int(p->color[2]);
-      // SFloat max_dist = p->max_dist_allow * 0.5;
-      for (int j = 0; j < 3; ++j) {
-        // Increase brightness
+      for (int j = 0; j < 3; ++j) {        // Increase brightness
         int increase = p->color[j] / divider;
         if (p->color[j] + increase > 255) p->color[j]  = 255;
         else                              p->color[j] += increase;
@@ -89,9 +84,11 @@ Atom::Atom(int numParticles) :
     for (SFloat & p_energy_cycle_ : pot_energy_cycle) {
       p_energy_cycle_ = 0;
     }
+#ifdef use_thread_pool
     const int num_threads = std::min((int)std::thread::hardware_concurrency(), num_particles*2);
     std::cout << "\t\t\t num threads " << num_threads << std::endl;
     thread_pool = new ThreadPool(num_threads);
+#endif
 }
 
   // Potential energy changes because of sinusoidal charge frequency.
