@@ -27,13 +27,11 @@ Particle::Particle(int id, bool is_electron, Atom* a,
           tee_logger(is_electron ? "e" + std::to_string(id) + ".log"
                                  : "p" + std::to_string(id) + ".log"),
                      tee(tee_logger.get_stream()) {
-    log_count = 2;
+    log_count = 1;
     std::cout << "\t" << (is_electron ? "electron" : "proton") << " " << id
-      << "\t frequency " << frequency << "  "
-              << (is_electron ? "electron" : "proton") << " mass mev " << mass_mev << std::endl;
+              << "\t max_dist_allow " << max_dist_allow << std::endl;
     tee << "\t\t initial_charge " << initial_charge << std::endl;
     num_allowed_escapes_for_energy_capping = (a_->num_particles / 2) + 2;  // Empirical formula.
-    std::cout << "\t\t\t max_dist_allow " << max_dist_allow << std::endl;
   }
 
 void Particle::logToBuffer(const std::string &s) {
@@ -124,7 +122,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     for (SFloat & v : vel) v = 0;
     log_count = 1;  // Force logging around this event.
     if (a_->total_energy < a_->total_energy_cap && num_allowed_escapes_for_energy_capping > 0) {
-      a_->total_energy_cap = a_->total_energy * (1 + ((SFloat)a_->num_particles / 4.0f));
+      a_->total_energy_cap = a_->total_energy * (1 + ((SFloat)a_->num_particles / 8.0f));
       tee << "  total energy cap set to " << a_->total_energy_cap;
       num_allowed_escapes_for_energy_capping -= 1;
     }

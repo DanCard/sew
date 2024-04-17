@@ -49,9 +49,9 @@ Atom::Atom(int numParticles) :
         p->color[1] = std::rand() % 256;
         p->color[2] = std::rand() % 245;
         if (i == 0) {
-          p->color[0] = 255;
-          p->color[1] = 120;
-          p->color[2] = 120;
+          p->color[0] = std::max(255, p->color[0]);
+          p->color[1] = std::max(120, p->color[1]);
+          p->color[2] = std::max(120, p->color[2]);
         }
         for (int j = 0; j < 3; ++j)
             p->pos[j] = ((float)(std::rand() / (RAND_MAX + 1.0)) - 0.5f) * electron_initial_radius;

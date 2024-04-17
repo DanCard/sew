@@ -22,8 +22,10 @@ namespace sew {
 
     std::ostringstream log_line;
     log_line
-      << std::setw(8) << a_->count << (w->is_electron ? " e" : " p") << w->id
-      << "⋅" << (par_closest->is_electron ? "e" : "p") << w->par_closest_id
+      << std::setw(8) << a_->count << (w->is_electron ? " e" : " p") << std::setw(2)
+      << w->id
+      << "⋅" << (par_closest->is_electron ? "e" : "p") << std::setw(2)
+      << w->par_closest_id
       << std::scientific << std::setprecision(3)
       << "  dis"  << std::setw(10) << (w->is_electron ? w->dist_mag_closest : w->pos_magnitude);
     if (velocity_logging) {
