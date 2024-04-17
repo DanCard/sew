@@ -29,7 +29,7 @@ Atom::Atom(int numParticles) :
     std::cout << "\t\t\t\t kEFrequency " << kEFrequency << "  kPFrequency " << kPFrequency << std::endl;
     // std::cout << "\t\t kBohrMagneton " << kBohrMagneton << "  kProtonMagneticMoment " << kProtonMagneticMoment << std::endl;
     const SFloat nucleus_initial_radius = kBohrRadiusProton * (num_particles / 2);
-    const SFloat electron_initial_radius = nucleus_initial_radius * 3.5;
+    const SFloat electron_initial_radius = nucleus_initial_radius * 3;
     std::cout << "\t\t\t\t nucleus initial radius " << nucleus_initial_radius << "  electron initial radius " << electron_initial_radius << std::endl;
     int divider;  // Prefer bright colors, but with many particles becomes indistinguishable.
          if (num_particles <= 2)  divider = 1;

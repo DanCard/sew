@@ -44,7 +44,7 @@ const double kEPeriod = kHEv / kEMassMEv;
 const double kPPeriod = kHEv / kPMassMEv;
 const int    kMaxParticles = 16;
 // For increased speed avoid lowering.  Instead increase threading.
-const int    kPFrequencySubDivisions =  32;
+const int    kPFrequencySubDivisions =  64;
 const int    kEFrequencySubDivisions = 128;
 // Ranges for dt = delta time
 // Slow the simulation when there are huge forces that create huge errors.

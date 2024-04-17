@@ -201,7 +201,7 @@ ThreeDim::ThreeDim(const Arguments& arguments) : Platform::Application{arguments
                                           static_cast<float>(pars->color[2])/255,
                                           0.1f  /* Transparency for trail */ };
     _trailsInstanceData[i].transformationMatrix = Matrix4::translation(_spherePositions[sphere_i]) *
-                                                  Matrix4::scaling(Vector3{.01f}) * 3;
+                                                  Matrix4::scaling(Vector3{.01f});
     _trailsInstanceData[i].        normalMatrix = inst->normalMatrix;
     sphere_i = ++sphere_i % numSpheres;
     pars = atom->pars[sphere_i];
@@ -314,7 +314,7 @@ void ThreeDim::drawSpheres() {
     // Could make it simple and zero at 0 charge.
     // Average charge is kQ = 1.602176634e-19 Coulombs.
     float charge = atom->pars[i]->freq_charge;
-    float radius = (std::abs(charge / sew::kQ) / 16) + 0.05f;
+    float radius = (std::abs(charge / sew::kQ) / 16) + 0.001f;
     // std::cout << "charge: " << charge << " radius: " << radius << std::endl;
     _sphereInstanceData[i].transformationMatrix = Matrix4::translation(s_pos) *
                                                   Matrix4::scaling(Vector3{radius});
@@ -322,7 +322,8 @@ void ThreeDim::drawSpheres() {
     if (atom->pars[i]->dist_traveled_since_last_trail_update >
         sew::Atom::kMaxPosChangeDesiredPerFrame/2) {
       atom->pars[i]->dist_traveled_since_last_trail_update = 0;
-      _trailsInstanceData[_trailsIndex].transformationMatrix.translation() = s_pos;
+      _trailsInstanceData[_trailsIndex].transformationMatrix = Matrix4::translation(s_pos) *
+                                                               Matrix4::scaling(Vector3{.01f});
     }
     _trailsIndex++;
   }
