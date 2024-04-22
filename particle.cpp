@@ -356,7 +356,7 @@ void Particle::ConsiderLoggingToFile(int count) {
     new_dt = a_->long_dt + ((a_->short_dt - kLongDt) * inverse_exponential);
     percent_energy_dissipated = 0;
     was_energy_dissipated = false;
-    // Dissipate energy when heading away.
+    // Dissipate energy when heading away.  https://twitter.com/akshay_pachaar/status/1782387805597164016
     if (dist_vel_dot_prod >= 0
      && orig_vel_dot_prod >= 0
      && dist_mag_closest > (kCloseToTrouble*16)) {

@@ -94,9 +94,10 @@ public:
   SFloat fast_fraction = 0;  // Percent we are between long dt and short dt.
 
   SFloat orig_vel_dot_prod;  // Positive = moving away from origin.  Negative = moving towards origin.
+  // https://twitter.com/akshay_pachaar/status/1782387821493584011
   // Determine if electron is coming or going relative to closest proton.
   // For proton indicates if coming or going relative to center.
-  SFloat       dist_vel_dot_prod;
+  SFloat       dist_vel_dot_prod;     // -1 = approaching, 1 = leaving
   // Due to energy gain problem, sometimes dissipate energy when moving away from center of atom.
   bool was_energy_dissipated = false;
   bool was_energy_dissipated_since_last_logged_to_screen = false;

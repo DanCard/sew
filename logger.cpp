@@ -39,6 +39,7 @@ namespace sew {
       else         log_line << (w->was_energy_dissipated_since_last_logged_to_screen ? " <E" : "   ");
     }
     if (dv_logging) {
+      // https://twitter.com/akshay_pachaar/status/1782387821493584011
       log_line << " d⋅v " << std::setw( 4) << std::fixed << std::setprecision(1)
                << w->dist_vel_dot_prod    // -1 = approaching, 1 = leaving
                << std::scientific;
